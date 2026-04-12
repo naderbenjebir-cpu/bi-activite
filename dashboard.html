@@ -1,0 +1,1653 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard — Production Mensuelle</title>
+<script src="https://unpkg.com/dexie@3.2.4/dist/dexie.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root {
+    --bg:      #f0f4f8;
+    --bg2:     #ffffff;
+    --bg3:     #e8edf3;
+    --border:  rgba(15,40,80,0.10);
+    --border2: rgba(15,40,80,0.20);
+    --text:    #0d1f3c;
+    --muted:   #5a7296;
+    --accent:  #f97316;
+    --blue:    #1e50a0;
+    --blue2:   #2563eb;
+    --amber:   #f97316;
+    --coral:   #ef4444;
+    --purple:  #7c3aed;
+    --teal:    #0ea5e9;
+    --green:   #16a34a;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Sora', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    min-height: 100vh;
+  }
+
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    background: var(--bg2);
+    z-index: 20;
+    box-shadow: 0 1px 0 var(--border);
+  }
+
+  .logo {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .logo-dot { width: 7px; height: 7px; background: #1e50a0; border-radius: 50%; animation: pulse 2s ease-in-out infinite; }
+
+  .header-right { display: flex; align-items: center; gap: 12px; }
+
+  .badge-app {
+    font-family: var(--mono);
+    font-size: 10px;
+    background: rgba(30,80,160,0.10);
+    color: var(--blue);
+    padding: 3px 9px;
+    border-radius: 20px;
+    border: 1px solid rgba(30,80,160,0.20);
+  }
+
+  a.nav-link {
+    font-size: 12px;
+    color: var(--blue);
+    text-decoration: none;
+    border: 1px solid var(--border);
+    padding: 4px 12px;
+    border-radius: 5px;
+    transition: all 0.15s;
+    font-weight: 500;
+  }
+
+  a.nav-link:hover { color: var(--accent); border-color: var(--accent); }
+
+  /* LAYOUT */
+  .layout {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    min-height: calc(100vh - 52px);
+  }
+
+  /* SIDEBAR FILTRES */
+  aside {
+    border-right: 1px solid var(--border);
+    padding: 20px 16px;
+    position: sticky;
+    top: 52px;
+    height: calc(100vh - 52px);
+    overflow-y: auto;
+    background: var(--bg2);
+  }
+
+  aside::-webkit-scrollbar { width: 3px; }
+  aside::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+  .filter-title {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--blue);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 14px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--accent);
+    font-weight: 500;
+  }
+
+  .filter-group { margin-bottom: 20px; }
+
+  .filter-label {
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 6px;
+    display: block;
+  }
+
+  select {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 12px;
+    padding: 7px 10px;
+    border-radius: 6px;
+    outline: none;
+    cursor: pointer;
+    transition: border-color 0.15s;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236b6b72' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    padding-right: 28px;
+  }
+
+  select:focus { border-color: var(--border2); }
+
+  .btn-reset {
+    width: 100%;
+    padding: 8px;
+    background: #1e50a0;
+    border: none;
+    border-radius: 6px;
+    color: #fff;
+    font-size: 11px;
+    font-family: var(--mono);
+    cursor: pointer;
+    transition: all 0.15s;
+    margin-top: 8px;
+    font-weight: 500;
+  }
+
+  .btn-reset:hover { background: #ea6a05; }
+
+  .filter-count {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--bg2);
+    background: #1e50a0;
+    padding: 3px 10px;
+    border-radius: 10px;
+    margin-top: 12px;
+    display: block;
+    text-align: center;
+    font-weight: 500;
+  }
+
+  /* MAIN CONTENT */
+  .content {
+    overflow-y: auto;
+    padding: 24px;
+  }
+
+  /* TABS */
+  .tabs {
+    display: flex;
+    gap: 2px;
+    margin-bottom: 24px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0;
+  }
+
+  .tab {
+    padding: 8px 16px;
+    font-size: 12px;
+    font-family: var(--mono);
+    color: var(--muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: all 0.15s;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    background: none;
+    border-top: none;
+    border-left: none;
+    border-right: none;
+  }
+
+  .tab:hover { color: var(--blue2); }
+  .tab.active { color: var(--blue); border-bottom-color: var(--blue); font-weight: 500; }
+
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* KPI GRID */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0,1fr));
+    gap: 8px;
+    margin-bottom: 24px;
+  }
+
+  .kpi-card {
+    background: var(--bg2);
+    box-shadow: 0 1px 3px rgba(15,40,80,0.06);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    transition: border-color 0.15s;
+  }
+
+  .kpi-card:hover { border-color: var(--border2); }
+
+  .kpi-label {
+    font-size: 10px;
+    color: var(--muted);
+    font-family: var(--mono);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 8px;
+  }
+
+  .kpi-val {
+    font-size: 18px;
+    font-weight: 500;
+    font-family: var(--mono);
+    letter-spacing: -0.02em;
+  }
+
+  .kpi-val.green { color: var(--green); }
+  .kpi-val.blue { color: var(--blue2); }
+  .kpi-val.amber { color: var(--accent); }
+  .kpi-val.coral { color: var(--coral); }
+  .kpi-val.purple { color: var(--purple); }
+
+  .kpi-sub {
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 4px;
+    font-family: var(--mono);
+  }
+
+  /* CHARTS GRID */
+  .charts-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-bottom: 24px;
+  }
+
+  .chart-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    box-shadow: 0 1px 3px rgba(15,40,80,0.06);
+  }
+
+  .chart-card.full { grid-column: 1 / -1; }
+
+  .chart-label {
+    font-size: 10px;
+    color: var(--blue);
+    font-family: var(--mono);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 14px;
+    font-weight: 500;
+  }
+
+  .chart-wrap { position: relative; }
+
+  /* TABLE */
+  .table-wrap {
+    background: var(--bg2);
+    box-shadow: 0 1px 3px rgba(15,40,80,0.06);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+
+  .table-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .table-title {
+    font-size: 10px;
+    color: var(--muted);
+    font-family: var(--mono);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .table-scroll { overflow-x: auto; max-height: 420px; overflow-y: auto; }
+  .table-scroll::-webkit-scrollbar { width: 4px; height: 4px; }
+  .table-scroll::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 600px; }
+
+  th {
+    background: var(--bg3);
+    color: var(--blue);
+    font-family: var(--mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 8px 12px;
+    text-align: left;
+    position: sticky;
+    top: 0;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  th:hover { color: var(--text); }
+  th.sort-asc::after { content: ' ↑'; color: var(--accent); }
+  th.sort-desc::after { content: ' ↓'; color: var(--accent); }
+
+  td {
+    padding: 7px 12px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(30,80,160,0.04); }
+
+  .td-right { text-align: right; font-family: var(--mono); font-size: 11px; }
+  .td-green { color: #16a34a; font-weight:500; }
+  .td-red { color: #ef4444; }
+  .td-muted { color: #5a7296; }
+
+  .bar-inline {
+    display: inline-block;
+    height: 3px;
+    border-radius: 2px;
+    background: #1e50a0;
+    opacity: 0.5;
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+
+  /* EMPTY */
+  .empty-db {
+    text-align: center;
+    padding: 80px 40px;
+    color: var(--muted);
+  }
+
+  .empty-db h2 { font-size: 18px; font-weight: 400; margin-bottom: 10px; color: var(--text); }
+  .empty-db p { font-size: 13px; line-height: 1.6; }
+  .empty-db a { color: var(--blue2); text-decoration: none; }
+  .empty-db a:hover { text-decoration: underline; }
+
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    aside { position: static; height: auto; }
+    .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+    .charts-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo" id="logo-diag" title="Cliquer pour diagnostic" style="cursor:pointer">
+    <div class="logo-dot"></div>
+    CNEXT · BI Activité
+  </div>
+  <div id="diag-panel" style="display:none;position:fixed;top:60px;left:16px;background:#1e1e22;border:1px solid rgba(255,255,255,0.14);border-radius:8px;padding:14px 18px;font-family:monospace;font-size:11px;color:#9ca3af;z-index:100;min-width:320px;max-width:440px">
+    <div style="color:#6ee7b7;font-weight:500;margin-bottom:8px">Diagnostic base de données</div>
+    <div id="diag-content">Chargement...</div>
+    <button onclick="document.getElementById('diag-panel').style.display='none'" style="margin-top:10px;background:transparent;border:1px solid rgba(255,255,255,0.14);color:#6b6b72;padding:3px 10px;border-radius:4px;cursor:pointer;font-size:10px">Fermer</button>
+  </div>
+  <div class="header-right">
+    <span class="badge-app">DASHBOARD</span>
+    <span id="last-update" style="font-size:11px;color:var(--muted);font-family:var(--mono)"></span>
+    <a href="admin.html" class="nav-link">⚙ Admin</a>
+  </div>
+</header>
+
+<div class="layout">
+
+  <!-- SIDEBAR -->
+  <aside>
+    <div class="filter-title">Filtres</div>
+
+    <div class="filter-group">
+      <label class="filter-label">Entité</label>
+      <select id="f-entite"><option value="">Toutes les entités</option></select>
+    </div>
+
+    <div class="filter-group">
+      <label class="filter-label">Année</label>
+      <select id="f-annee"><option value="">Toutes les années</option></select>
+    </div>
+
+    <div class="filter-group">
+      <label class="filter-label" style="display:flex;justify-content:space-between">
+        <span>Période</span>
+        <span id="periode-label" style="color:#f97316;font-family:var(--mono);font-size:10px;font-weight:500"></span>
+      </label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        <select id="f-mois-debut"><option value="">Début</option></select>
+        <select id="f-mois-fin"><option value="">Fin</option></select>
+      </div>
+      <button id="btn-reset-periode" style="margin-top:5px;width:100%;padding:4px;background:transparent;border:none;color:var(--muted);font-size:10px;font-family:var(--mono);cursor:pointer;text-align:left;display:none">✕ effacer la période</button>
+    </div>
+
+    <div class="filter-group">
+      <label class="filter-label">Client (donneur d'ordre)</label>
+      <select id="f-client"><option value="">Tous les clients</option></select>
+    </div>
+
+    <div class="filter-group">
+      <label class="filter-label">Client final</label>
+      <select id="f-client-final"><option value="">Tous</option></select>
+    </div>
+
+    <div class="filter-group">
+      <label class="filter-label">Collaborateur</label>
+      <select id="f-collab"><option value="">Tous</option></select>
+    </div>
+
+    <div class="filter-group">
+      <label class="filter-label">Interne / Externe</label>
+      <select id="f-type">
+        <option value="">Tous</option>
+        <option value="Interne">Interne</option>
+        <option value="Externe">Externe</option>
+      </select>
+    </div>
+
+    <div class="filter-group">
+      <label class="filter-label">Régie / Forfait</label>
+      <select id="f-regie">
+        <option value="">Tous</option>
+        <option value="REGIE">Régie</option>
+        <option value="FORFAIT">Forfait</option>
+      </select>
+    </div>
+
+    <button class="btn-reset" id="btn-reset">Réinitialiser les filtres</button>
+
+    <span class="filter-count" id="filter-count">— lignes</span>
+  </aside>
+
+  <!-- CONTENT -->
+  <div class="content" id="main-content">
+
+    <div class="tabs">
+      <button class="tab active" data-tab="vue-globale">Vue globale</button>
+      <button class="tab" data-tab="par-annee">Comparaison années</button>
+      <button class="tab" data-tab="par-client">Par client</button>
+      <button class="tab" data-tab="par-collaborateur">Par collaborateur</button>
+      <button class="tab" data-tab="par-affaire">Par affaire</button>
+      <button class="tab" data-tab="detail">Détail lignes</button>
+    </div>
+
+    <!-- VUE GLOBALE -->
+    <div class="tab-content active" id="tab-vue-globale">
+      <div class="kpi-grid" id="kpis"></div>
+      <div class="charts-grid">
+        <div class="chart-card full">
+          <div class="chart-label">Évolution mensuelle — CA, Coûts, Marge brute</div>
+          <div class="chart-wrap" style="height:220px"><canvas id="chart-evol" role="img" aria-label="Évolution mensuelle"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-label">Répartition CA par client</div>
+          <div class="chart-wrap" style="height:240px"><canvas id="chart-clients" role="img" aria-label="CA par client"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-label">Jours produits par collaborateur (top 10)</div>
+          <div class="chart-wrap" style="height:240px"><canvas id="chart-collabs" role="img" aria-label="Jours par collaborateur"></canvas></div>
+        </div>
+        <div class="chart-card full">
+          <div class="chart-label">TJM moyen et taux de marge par client</div>
+          <div class="chart-wrap" style="height:200px"><canvas id="chart-tjm" role="img" aria-label="TJM par client"></canvas></div>
+        </div>
+        <div class="chart-card full">
+          <div class="chart-label">TACE par collaborateur — taux d'activité (jours facturés / jours ouvrables)</div>
+          <div class="chart-wrap" id="chart-tace-wrap" style="height:280px"><canvas id="chart-tace" role="img" aria-label="TACE par collaborateur"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PAR ANNEE -->
+    <div class="tab-content" id="tab-par-annee">
+
+      <!-- KPIs comparatifs -->
+      <div id="annee-kpis-wrap" style="margin-bottom:24px"></div>
+
+      <!-- Axe de comparaison -->
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+        <span style="font-size:11px;color:var(--muted);font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em">Comparer par</span>
+        <div style="display:flex;gap:4px">
+          <button class="annee-axis-btn active" data-axis="mois" style="font-size:11px;padding:4px 12px;border-radius:20px;border:1px solid var(--border2);background:var(--accent2);color:#fff;cursor:pointer;font-family:var(--mono)">Mois</button>
+          <button class="annee-axis-btn" data-axis="client" style="font-size:11px;padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:var(--bg2);color:var(--muted);cursor:pointer;font-family:var(--mono)">Client</button>
+          <button class="annee-axis-btn" data-axis="collaborateur" style="font-size:11px;padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:var(--bg2);color:var(--muted);cursor:pointer;font-family:var(--mono)">Collaborateur</button>
+          <button class="annee-axis-btn" data-axis="entite" style="font-size:11px;padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:var(--bg2);color:var(--muted);cursor:pointer;font-family:var(--mono)">Entité</button>
+        </div>
+        <div style="display:flex;gap:4px;margin-left:auto">
+          <button class="annee-metric-btn active" data-metric="ca" style="font-size:11px;padding:4px 12px;border-radius:20px;border:1px solid var(--border2);background:var(--accent2);color:#fff;cursor:pointer;font-family:var(--mono)">CA</button>
+          <button class="annee-metric-btn" data-metric="marge" style="font-size:11px;padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:var(--bg2);color:var(--muted);cursor:pointer;font-family:var(--mono)">Marge</button>
+          <button class="annee-metric-btn" data-metric="jours" style="font-size:11px;padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:var(--bg2);color:var(--muted);cursor:pointer;font-family:var(--mono)">Jours</button>
+          <button class="annee-metric-btn" data-metric="taux" style="font-size:11px;padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:var(--bg2);color:var(--muted);cursor:pointer;font-family:var(--mono)">Tx marge</button>
+        </div>
+      </div>
+
+      <!-- Graphique comparaison -->
+      <div class="chart-card full" style="margin-bottom:24px">
+        <div class="chart-label" id="annee-chart-label">CA par mois — comparaison années</div>
+        <div class="chart-wrap" style="height:280px"><canvas id="chart-annee" role="img" aria-label="Comparaison années"></canvas></div>
+      </div>
+
+      <!-- Tableau comparatif -->
+      <div class="table-wrap">
+        <div class="table-header">
+          <span class="table-title" id="annee-table-title">Tableau comparatif par mois</span>
+        </div>
+        <div class="table-scroll">
+          <table id="tbl-annee"><thead></thead><tbody></tbody></table>
+        </div>
+      </div>
+    </div>
+
+    <!-- PAR CLIENT -->
+    <div class="tab-content" id="tab-par-client">
+      <div class="table-wrap">
+        <div class="table-header">
+          <span class="table-title">Analyse par client</span>
+        </div>
+        <div class="table-scroll">
+          <table id="tbl-client"><thead></thead><tbody></tbody></table>
+        </div>
+      </div>
+    </div>
+
+    <!-- PAR COLLABORATEUR -->
+    <div class="tab-content" id="tab-par-collaborateur">
+      <div class="table-wrap">
+        <div class="table-header">
+          <span class="table-title">Analyse par collaborateur</span>
+        </div>
+        <div class="table-scroll">
+          <table id="tbl-collab"><thead></thead><tbody></tbody></table>
+        </div>
+      </div>
+    </div>
+
+    <!-- PAR AFFAIRE -->
+    <div class="tab-content" id="tab-par-affaire">
+      <div class="table-wrap">
+        <div class="table-header">
+          <span class="table-title">Analyse par affaire</span>
+        </div>
+        <div class="table-scroll">
+          <table id="tbl-affaire"><thead></thead><tbody></tbody></table>
+        </div>
+      </div>
+    </div>
+
+    <!-- DETAIL -->
+    <div class="tab-content" id="tab-detail">
+      <div class="table-wrap">
+        <div class="table-header">
+          <span class="table-title">Lignes de production</span>
+        </div>
+        <div class="table-scroll">
+          <table id="tbl-detail"><thead></thead><tbody></tbody></table>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ─── DB ──────────────────────────────────────────────────────
+const db = new Dexie('BiActivite');
+db.version(1).stores({
+  productions: '++id, mois_annee, import_id',
+  imports_log: '++id, mois_annee, imported_at'
+});
+db.version(2).stores({
+  productions: '++id, mois_annee, import_id',
+  imports_log: '++id, mois_annee, imported_at',
+  greentech_corrections: '++id, collaborateur'
+}).upgrade(() => {});
+db.version(3).stores({
+  productions: '++id, mois_annee, import_id',
+  imports_log: '++id, mois_annee, imported_at',
+  greentech_corrections: '++id, collaborateur',
+  corrections_log: '++id, applied_at'
+}).upgrade(() => {});
+
+// ─── UTILS ───────────────────────────────────────────────────
+function formatMois(m) {
+  if (!m) return '—';
+  const s = String(m);
+  const y = s.slice(0,4), mo = s.slice(4,6);
+  const names = ['','Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
+  return `${names[parseInt(mo)]} ${y}`;
+}
+
+function fmtEur(n) {
+  if (n == null || isNaN(n)) return '—';
+  return new Intl.NumberFormat('fr-FR', { style:'currency', currency:'EUR', maximumFractionDigits:0 }).format(n);
+}
+
+function fmtNum(n, dec=1) {
+  if (n == null || isNaN(n)) return '—';
+  return new Intl.NumberFormat('fr-FR', { minimumFractionDigits:dec, maximumFractionDigits:dec }).format(n);
+}
+
+function pct(a, b) {
+  return b > 0 ? (a/b*100) : 0;
+}
+
+function margeClass(v) {
+  if (v >= 30) return 'td-green';
+  if (v >= 15) return '';
+  return 'td-red';
+}
+
+// ─── JOURS OUVRABLES FRANCE ──────────────────────────────────
+function joursFeriesFrance(year) {
+  // Calcul de Pâques (algorithme de Gauss)
+  const a = year % 19, b = Math.floor(year/100), c = year % 100;
+  const d = Math.floor(b/4), e = b % 4, f = Math.floor((b+8)/25);
+  const g = Math.floor((b-f+1)/3), h = (19*a+b-d-g+15) % 30;
+  const i = Math.floor(c/4), k = c % 4;
+  const l = (32+2*e+2*i-h-k) % 7;
+  const m = Math.floor((a+11*h+22*l)/451);
+  const month = Math.floor((h+l-7*m+114)/31);
+  const day   = ((h+l-7*m+114) % 31) + 1;
+  const paques = new Date(year, month-1, day);
+
+  const lundi_paques    = new Date(paques); lundi_paques.setDate(paques.getDate()+1);
+  const ascension       = new Date(paques); ascension.setDate(paques.getDate()+39);
+  const lundi_pentecote = new Date(paques); lundi_pentecote.setDate(paques.getDate()+50);
+
+  return [
+    new Date(year,0,1),   // 1er janvier
+    lundi_paques,
+    new Date(year,4,1),   // 1er mai
+    new Date(year,4,8),   // 8 mai
+    ascension,
+    lundi_pentecote,
+    new Date(year,6,14),  // 14 juillet
+    new Date(year,7,15),  // 15 août
+    new Date(year,10,1),  // 1er novembre
+    new Date(year,10,11), // 11 novembre
+    new Date(year,11,25), // 25 décembre
+  ].map(d => d.toISOString().slice(0,10)); // format YYYY-MM-DD
+}
+
+const _joursOuvCache = {};
+function joursOuvrables(moisAnnee) {
+  const s = String(moisAnnee);
+  const year  = parseInt(s.slice(0,4));
+  const month = parseInt(s.slice(4,6)) - 1; // 0-indexed
+  const key   = `${year}-${month}`;
+  if (_joursOuvCache[key] !== undefined) return _joursOuvCache[key];
+
+  const feries = new Set(joursFeriesFrance(year));
+  let count = 0;
+  const d = new Date(year, month, 1);
+  while (d.getMonth() === month) {
+    const dow = d.getDay(); // 0=dim, 6=sam
+    if (dow !== 0 && dow !== 6 && !feries.has(d.toISOString().slice(0,10))) count++;
+    d.setDate(d.getDate()+1);
+  }
+  _joursOuvCache[key] = count;
+  return count;
+}
+
+// Calcule les jours ouvrables pour un ensemble de mois
+function joursOuvrablesPeriode(moisList) {
+  // Retourne un Map mois -> nb jours ouvrables
+  const map = {};
+  moisList.forEach(m => { map[m] = joursOuvrables(m); });
+  return map;
+}
+
+// TACE d'un collaborateur sur la période filtrée
+// rows = lignes du collaborateur, moisJOMap = { mois -> nb jours ouvrables }
+function calcTACE(joursFactures, moisSet, moisJOMap) {
+  // Total jours ouvrables sur la période de présence du collab
+  const totalJO = [...moisSet].reduce((s,m) => s + (moisJOMap[m]||0), 0);
+  return totalJO > 0 ? Math.min(joursFactures / totalJO * 100, 100) : 0;
+}
+
+function taceClass(v) {
+  if (v >= 80) return 'td-green';
+  if (v >= 50) return '';
+  return 'td-red';
+}
+
+function taceBar(v) {
+  const w = Math.round(v * 0.6); // max 60px
+  const col = v>=80?'#16a34a':v>=50?'#f97316':'#ef4444';
+  return `<span style="display:inline-block;height:4px;width:${w}px;border-radius:2px;background:${col};opacity:0.7;margin-left:6px;vertical-align:middle"></span>`;
+}
+
+// ─── CHARTS ──────────────────────────────────────────────────
+let charts = {};
+
+function destroyChart(id) {
+  if (charts[id]) { charts[id].destroy(); delete charts[id]; }
+}
+
+const PALETTE = ['#6ee7b7','#60a5fa','#fbbf24','#a78bfa','#fb7185','#34d399','#93c5fd','#f9a8d4','#86efac','#fcd34d'];
+
+// ─── AGGREGATE ───────────────────────────────────────────────
+function aggregate(rows, key, labelFn) {
+  const map = {};
+  rows.forEach(r => {
+    const k = r[key] || 'Non renseigné';
+    if (!map[k]) map[k] = { label: labelFn ? labelFn(k) : k, ca:0, cout:0, jours:0, nb:0, pv_sum:0 };
+    map[k].ca    += r.total_ht   || 0;
+    map[k].cout  += r.cout_total || 0;
+    map[k].jours += r.nb_jours   || 0;
+    map[k].nb    += 1;
+    map[k].pv_sum += r.pv_jour  || 0;
+  });
+  return Object.values(map)
+    .map(d => ({ ...d, marge: d.ca - d.cout, taux: pct(d.ca - d.cout, d.ca), tjm: d.jours > 0 ? d.ca/d.jours : 0 }))
+    .sort((a,b) => b.ca - a.ca);
+}
+
+// ─── RENDER KPIs ─────────────────────────────────────────────
+function renderKPIs(rows) {
+  const ca    = rows.reduce((s,r) => s + (r.total_ht||0), 0);
+  const cout  = rows.reduce((s,r) => s + (r.cout_total||0), 0);
+  const marge = ca - cout;
+  const jours = rows.reduce((s,r) => s + (r.nb_jours||0), 0);
+  const tjm   = jours > 0 ? ca/jours : 0;
+  const tauxM = pct(marge, ca);
+
+  // TACE global : jours facturés / (nb collabs uniques × JO période)
+  const collabsUniques = new Set(rows.map(r => r.collaborateur).filter(Boolean));
+  const moisUniques    = new Set(rows.map(r => String(r.mois_annee)).filter(Boolean));
+  const moisJOMap      = joursOuvrablesPeriode([...moisUniques]);
+  const totalJOPeriode = [...moisUniques].reduce((s,m) => s + (moisJOMap[m]||0), 0);
+  const capaciteTotal  = collabsUniques.size * totalJOPeriode;
+  const taceGlobal     = capaciteTotal > 0 ? Math.min(jours / capaciteTotal * 100, 100) : 0;
+  const taceCol        = taceGlobal>=80?'#16a34a':taceGlobal>=50?'#f97316':'#ef4444';
+
+  document.getElementById('kpis').innerHTML = `
+    <div class="kpi-card" style="border-top:3px solid #1e50a0"><div class="kpi-label">CA total</div><div class="kpi-val" style="color:#1e50a0">${fmtEur(ca)}</div><div class="kpi-sub">${rows.length} lignes</div></div>
+    <div class="kpi-card" style="border-top:3px solid #0ea5e9"><div class="kpi-label">Coûts</div><div class="kpi-val" style="color:#0ea5e9">${fmtEur(cout)}</div><div class="kpi-sub">${fmtNum(jours,0)} j facturés</div></div>
+    <div class="kpi-card" style="border-top:3px solid #f97316"><div class="kpi-label">Marge brute</div><div class="kpi-val" style="color:#f97316">${fmtEur(marge)}</div><div class="kpi-sub"></div></div>
+    <div class="kpi-card" style="border-top:3px solid ${tauxM>=20?'#16a34a':tauxM>=10?'#f97316':'#ef4444'}"><div class="kpi-label">Taux de marge</div><div class="kpi-val" style="color:${tauxM>=20?'#16a34a':tauxM>=10?'#f97316':'#ef4444'}">${fmtNum(tauxM)}%</div><div class="kpi-sub"></div></div>
+    <div class="kpi-card" style="border-top:3px solid #7c3aed"><div class="kpi-label">TJM moyen</div><div class="kpi-val" style="color:#7c3aed">${fmtEur(tjm)}</div><div class="kpi-sub">€/jour</div></div>
+    <div class="kpi-card" style="border-top:3px solid ${taceCol};grid-column:span 1"><div class="kpi-label">TACE global</div><div class="kpi-val" style="color:${taceCol}">${fmtNum(taceGlobal)}%</div><div class="kpi-sub">${fmtNum(jours,0)}j / ${capaciteTotal}j cap. · ${collabsUniques.size} collabs</div></div>
+  `;
+}
+
+// ─── RENDER CHARTS ───────────────────────────────────────────
+function renderCharts(rows) {
+  // Évolution mensuelle
+  const byMois = {};
+  rows.forEach(r => {
+    const m = String(r.mois_annee);
+    if (!byMois[m]) byMois[m] = { ca:0, cout:0 };
+    byMois[m].ca   += r.total_ht   || 0;
+    byMois[m].cout += r.cout_total || 0;
+  });
+  const moisKeys = Object.keys(byMois).sort();
+  const caData    = moisKeys.map(m => byMois[m].ca);
+  const coutData  = moisKeys.map(m => byMois[m].cout);
+  const margeData = moisKeys.map(m => byMois[m].ca - byMois[m].cout);
+
+  destroyChart('evol');
+  destroyChart('tace');
+  destroyChart('annee');
+  charts['evol'] = new Chart(document.getElementById('chart-evol'), {
+    type: 'bar',
+    data: {
+      labels: moisKeys.map(formatMois),
+      datasets: [
+        { label:'CA', data: caData, backgroundColor:'#1e50a030', borderColor:'#1e50a0', borderWidth:1.5, borderRadius:4 },
+        { label:'Coûts', data: coutData, backgroundColor:'#0ea5e930', borderColor:'#0ea5e9', borderWidth:1.5, borderRadius:4 },
+        { label:'Marge', data: margeData, backgroundColor:'#f9731640', borderColor:'#f97316', borderWidth:1.5, borderRadius:4, type:'bar' }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color:'rgba(15,40,80,0.06)' }, ticks: { color:'#5a7296', font:{size:11} } },
+        y: { grid: { color:'rgba(15,40,80,0.06)' }, ticks: { color:'#5a7296', font:{size:11}, callback: v => (v/1000).toFixed(0)+'k€' } }
+      }
+    }
+  });
+
+  // CA par client (donut)
+  const byClient = aggregate(rows, 'client');
+  const top8 = byClient.slice(0,8);
+  destroyChart('clients');
+  charts['clients'] = new Chart(document.getElementById('chart-clients'), {
+    type: 'doughnut',
+    data: {
+      labels: top8.map(d=>d.label),
+      datasets: [{ data: top8.map(d=>d.ca), backgroundColor: PALETTE, borderWidth:0, hoverOffset:4 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position:'right', labels:{ color:'#5a7296', font:{size:10}, padding:10, boxWidth:10, boxHeight:10 } }
+      }
+    }
+  });
+
+  // Jours par collaborateur (horizontal bar)
+  const byCollab = aggregate(rows, 'collaborateur').slice(0,10);
+  destroyChart('collabs');
+  charts['collabs'] = new Chart(document.getElementById('chart-collabs'), {
+    type: 'bar',
+    data: {
+      labels: byCollab.map(d=>d.label),
+      datasets: [{ data: byCollab.map(d=>d.jours), backgroundColor:'#a78bfa60', borderColor:'#a78bfa', borderWidth:1.5, borderRadius:3 }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color:'rgba(15,40,80,0.06)' }, ticks:{ color:'#5a7296', font:{size:10} } },
+        y: { grid: { display:false }, ticks:{ color:'#5a7296', font:{size:10} } }
+      }
+    }
+  });
+
+  // TJM par client (bar)
+  const clientsTJM = byClient.filter(d=>d.jours>0).slice(0,10);
+  destroyChart('tjm');
+  charts['tjm'] = new Chart(document.getElementById('chart-tjm'), {
+    type: 'bar',
+    data: {
+      labels: clientsTJM.map(d=>d.label),
+      datasets: [
+        { label:'TJM (€/j)', data: clientsTJM.map(d=>d.tjm), backgroundColor:'#1e50a025', borderColor:'#1e50a0', borderWidth:1.5, borderRadius:4 },
+        { label:'Taux marge %', data: clientsTJM.map(d=>d.taux), backgroundColor:'#f9731640', borderColor:'#f97316', borderWidth:1.5, borderRadius:4, yAxisID:'y2' }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels:{ color:'#5a7296', font:{size:10}, boxWidth:10 } } },
+      scales: {
+        x: { grid:{ color:'rgba(15,40,80,0.06)' }, ticks:{ color:'#5a7296', font:{size:10} } },
+        y: { grid:{ color:'rgba(15,40,80,0.06)' }, ticks:{ color:'#5a7296', font:{size:10}, callback: v=>v+'€' } },
+        y2: { position:'right', grid:{ display:false }, ticks:{ color:'#fb7185', font:{size:10}, callback: v=>v+'%' } }
+      }
+    }
+  });
+
+  // TACE par collaborateur (horizontal bar)
+  const collabMoisMap = {};
+  rows.forEach(r => {
+    const c = r.collaborateur||'N/A';
+    const m = String(r.mois_annee);
+    if (!collabMoisMap[c]) collabMoisMap[c] = new Set();
+    collabMoisMap[c].add(m);
+  });
+  const allMoisJO = joursOuvrablesPeriode([...new Set(rows.map(r=>String(r.mois_annee)))]);
+  const byCollabAgg = aggregate(rows, 'collaborateur');
+  const taceData = byCollabAgg.map(d => {
+    const moisC  = collabMoisMap[d.label] || new Set();
+    const joC    = [...moisC].reduce((s,m)=>s+(allMoisJO[m]||0), 0);
+    return { label: d.label, tace: joC>0 ? Math.min(d.jours/joC*100,100) : 0, jours: d.jours, jo: joC };
+  }).sort((a,b)=>b.tace-a.tace).slice(0,15);
+
+  const taceColors = taceData.map(d => d.tace>=80?'#16a34a':d.tace>=50?'#f97316':'#ef4444');
+  // Adjust chart height dynamically
+  document.getElementById('chart-tace-wrap').style.height = Math.max(200, taceData.length * 28 + 60) + 'px';
+
+  destroyChart('tace');
+  charts['tace'] = new Chart(document.getElementById('chart-tace'), {
+    type: 'bar',
+    data: {
+      labels: taceData.map(d => d.label),
+      datasets: [
+        {
+          label: 'TACE %',
+          data: taceData.map(d => Math.round(d.tace*10)/10),
+          backgroundColor: taceColors.map(c => c+'30'),
+          borderColor: taceColors,
+          borderWidth: 1.5,
+          borderRadius: 4
+        }
+      ]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const d = taceData[ctx.dataIndex];
+              return ` ${ctx.parsed.x.toFixed(1)}%  (${d.jours.toFixed(1)}j / ${d.jo}j ouvrables)`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          min: 0, max: 100,
+          grid: { color:'rgba(15,40,80,0.06)' },
+          ticks: { color:'#5a7296', font:{size:10}, callback: v=>v+'%' }
+        },
+        y: { grid:{ display:false }, ticks:{ color:'#0d1f3c', font:{size:11} } }
+      }
+    }
+  });
+}
+
+// ─── RENDER TABLES ───────────────────────────────────────────
+function makeTable(el, cols, data) {
+  const thead = el.querySelector('thead');
+  const tbody = el.querySelector('tbody');
+  thead.innerHTML = `<tr>${cols.map(c=>`<th>${c.label}</th>`).join('')}</tr>`;
+  if (!data.length) {
+    tbody.innerHTML = `<tr><td colspan="${cols.length}" style="text-align:center;color:var(--muted);padding:24px">Aucune donnée pour les filtres sélectionnés</td></tr>`;
+    return;
+  }
+  const maxCA = Math.max(...data.map(d => d.ca || 0));
+  tbody.innerHTML = data.map(row => `
+    <tr>${cols.map(c => {
+      const v = row[c.key];
+      const align = c.right ? 'td-right' : '';
+      const color = c.color ? c.color(row) : '';
+      const bar = c.bar ? `<span class="bar-inline" style="width:${Math.round(pct(row.ca||0,maxCA)*0.8)}px"></span>` : '';
+      return `<td class="${align} ${color}">${v}${bar}</td>`;
+    }).join('')}</tr>
+  `).join('');
+}
+
+function renderTableClient(rows) {
+  const data = aggregate(rows, 'client').map(d => ({
+    ...d,
+    ca_f:    fmtEur(d.ca),
+    cout_f:  fmtEur(d.cout),
+    marge_f: fmtEur(d.marge),
+    taux_f:  fmtNum(d.taux) + '%',
+    jours_f: fmtNum(d.jours, 1),
+    tjm_f:   fmtEur(d.tjm),
+    _taux:   d.taux
+  }));
+  makeTable(document.getElementById('tbl-client'), [
+    { key:'label',  label:'Client' },
+    { key:'ca_f',   label:'CA HT', right:true, bar:true },
+    { key:'cout_f', label:'Coûts', right:true },
+    { key:'marge_f',label:'Marge brute', right:true, color: r => r._taux>=20?'td-green':r._taux>=10?'':'td-red' },
+    { key:'taux_f', label:'Taux marge', right:true, color: r => r._taux>=20?'td-green':r._taux>=10?'':'td-red' },
+    { key:'jours_f',label:'Jours', right:true },
+    { key:'tjm_f',  label:'TJM', right:true },
+    { key:'nb',     label:'Lignes', right:true, color: () => 'td-muted' }
+  ], data);
+}
+
+function renderTableCollab(rows) {
+  // Calculer TACE par collaborateur
+  // Pour chaque collab : jours facturés / (JO des mois où il a des lignes)
+  const collabMois = {};
+  rows.forEach(r => {
+    const c = r.collaborateur || 'N/A';
+    const m = String(r.mois_annee);
+    if (!collabMois[c]) collabMois[c] = new Set();
+    collabMois[c].add(m);
+  });
+  const allMois = new Set(rows.map(r => String(r.mois_annee)));
+  const moisJOMap = joursOuvrablesPeriode([...allMois]);
+
+  const data = aggregate(rows, 'collaborateur').map(d => {
+    const moisCollab = collabMois[d.label] || new Set();
+    const joCollab   = [...moisCollab].reduce((s,m) => s + (moisJOMap[m]||0), 0);
+    const tace       = joCollab > 0 ? Math.min(d.jours / joCollab * 100, 100) : 0;
+    const joLabel    = `${fmtNum(d.jours,1)}j / ${joCollab}j`;
+    return {
+      ...d,
+      ca_f:    fmtEur(d.ca),
+      cout_f:  fmtEur(d.cout),
+      marge_f: fmtEur(d.marge),
+      taux_f:  fmtNum(d.taux) + '%',
+      jours_f: fmtNum(d.jours, 1),
+      jo_f:    joCollab,
+      tjm_f:   fmtEur(d.tjm),
+      tace_v:  tace,
+      tace_f:  fmtNum(tace, 1) + '%' + taceBar(tace),
+      jo_label: joLabel,
+      _taux:   d.taux
+    };
+  });
+
+  // Trier par TACE décroissant
+  data.sort((a,b) => b.tace_v - a.tace_v);
+
+  makeTable(document.getElementById('tbl-collab'), [
+    { key:'label',  label:'Collaborateur' },
+    { key:'tace_f', label:'TACE', right:true, color: r => taceClass(r.tace_v) },
+    { key:'jours_f',label:'Jours facturés', right:true },
+    { key:'jo_f',   label:'Jours ouvrables', right:true, color:()=>'td-muted' },
+    { key:'ca_f',   label:'CA HT', right:true },
+    { key:'marge_f',label:'Marge', right:true, color: r => r._taux>=20?'td-green':r._taux>=10?'':'td-red' },
+    { key:'taux_f', label:'Tx marge', right:true, color: r => r._taux>=20?'td-green':r._taux>=10?'':'td-red' },
+    { key:'tjm_f',  label:'TJM', right:true }
+  ], data);
+}
+
+function renderTableAffaire(rows) {
+  const map = {};
+  rows.forEach(r => {
+    const k = r.ref_affaire || 'N/A';
+    if (!map[k]) map[k] = { ref:k, objet: r.objet_affaire||'—', client: r.client||'—', ca:0, cout:0, jours:0, nb:0 };
+    map[k].ca    += r.total_ht   || 0;
+    map[k].cout  += r.cout_total || 0;
+    map[k].jours += r.nb_jours   || 0;
+    map[k].nb    += 1;
+  });
+  const data = Object.values(map)
+    .map(d => ({ ...d, marge: d.ca-d.cout, taux: pct(d.ca-d.cout, d.ca), tjm: d.jours>0?d.ca/d.jours:0,
+      ca_f: fmtEur(d.ca), cout_f: fmtEur(d.cout),
+      marge_f: fmtEur(d.ca-d.cout), taux_f: fmtNum(pct(d.ca-d.cout,d.ca))+'%',
+      jours_f: fmtNum(d.jours,1), tjm_f: fmtEur(d.jours>0?d.ca/d.jours:0) }))
+    .sort((a,b) => b.ca - a.ca);
+  makeTable(document.getElementById('tbl-affaire'), [
+    { key:'ref',    label:'Réf. affaire' },
+    { key:'objet',  label:'Objet' },
+    { key:'client', label:'Client' },
+    { key:'ca_f',   label:'CA HT', right:true, bar:true },
+    { key:'marge_f',label:'Marge', right:true, color: r => r.taux>=20?'td-green':r.taux>=10?'':'td-red' },
+    { key:'taux_f', label:'Taux', right:true, color: r => r.taux>=20?'td-green':r.taux>=10?'':'td-red' },
+    { key:'jours_f',label:'Jours', right:true },
+    { key:'tjm_f',  label:'TJM', right:true }
+  ], data);
+}
+
+function renderTableDetail(rows) {
+  const data = [...rows].sort((a,b) => String(b.mois_annee).localeCompare(String(a.mois_annee))).map(r => ({
+    mois:    formatMois(r.mois_annee),
+    collab:  r.collaborateur || '—',
+    client:  r.client || '—',
+    cf:      r.client_final || '—',
+    objet:   (r.objet_affaire||'—').slice(0,45),
+    type:    r.interne_externe || '—',
+    jours_f: fmtNum(r.nb_jours, 1),
+    pv_f:    fmtEur(r.pv_jour),
+    ca_f:    fmtEur(r.total_ht),
+    cout_f:  fmtEur(r.cout_total),
+    marge_f: fmtEur(r.marge_brute),
+    taux_f:  r.total_ht>0 ? fmtNum(pct(r.marge_brute, r.total_ht))+'%' : '—',
+    _taux:   r.total_ht>0 ? pct(r.marge_brute, r.total_ht) : 0
+  }));
+  makeTable(document.getElementById('tbl-detail'), [
+    { key:'mois',   label:'Mois', color:()=>'td-muted' },
+    { key:'collab', label:'Collaborateur' },
+    { key:'client', label:'Client' },
+    { key:'cf',     label:'Client final' },
+    { key:'objet',  label:'Affaire' },
+    { key:'type',   label:'Type', color:()=>'td-muted' },
+    { key:'jours_f',label:'Jours', right:true },
+    { key:'pv_f',   label:'PV/j', right:true },
+    { key:'ca_f',   label:'CA HT', right:true },
+    { key:'cout_f', label:'Coûts', right:true },
+    { key:'marge_f',label:'Marge', right:true, color: r=>r._taux>=20?'td-green':r._taux>=10?'':'td-red' },
+    { key:'taux_f', label:'Taux', right:true, color: r=>r._taux>=20?'td-green':r._taux>=10?'':'td-red' }
+  ], data);
+}
+
+// ─── FILTERS ─────────────────────────────────────────────────
+let allRows = [];
+let activeTab = 'vue-globale';
+
+function getFiltered() {
+  const entite    = document.getElementById('f-entite').value;
+  const annee     = document.getElementById('f-annee').value;
+  const moisDebut = document.getElementById('f-mois-debut').value;
+  const moisFin   = document.getElementById('f-mois-fin').value;
+  const client    = document.getElementById('f-client').value;
+  const cf        = document.getElementById('f-client-final').value;
+  const collab    = document.getElementById('f-collab').value;
+  const type      = document.getElementById('f-type').value;
+  const regie     = document.getElementById('f-regie').value;
+
+  return allRows.filter(r => {
+    const m = String(r.mois_annee);
+    const y = m.slice(0,4);
+    if (entite && r.entite_collab !== entite) return false;
+    if (annee  && y !== annee) return false;
+    if (moisDebut && m < moisDebut) return false;
+    if (moisFin   && m > moisFin)   return false;
+    if (client && r.client !== client) return false;
+    if (cf     && r.client_final !== cf) return false;
+    if (collab && r.collaborateur !== collab) return false;
+    if (type   && r.interne_externe !== type) return false;
+    if (regie  && r.regie_forfait !== regie) return false;
+    return true;
+  });
+}
+
+function populateFilter(id, rows, key, labelFn) {
+  const el = document.getElementById(id);
+  const current = el.value;
+  const vals = [...new Set(rows.map(r => r[key]).filter(Boolean))].sort();
+  const firstOpt = el.options[0].outerHTML;
+  el.innerHTML = firstOpt + vals.map(v => `<option value="${v}">${labelFn ? labelFn(v) : v}</option>`).join('');
+  if (vals.includes(current)) el.value = current;
+}
+
+function buildFilters() {
+  populateFilter('f-entite', allRows, 'entite_collab');
+
+  // Années distinctes
+  const annees = [...new Set(allRows.map(r => String(r.mois_annee).slice(0,4)).filter(Boolean))].sort();
+  const selAnnee = document.getElementById('f-annee');
+  const curAnnee = selAnnee.value;
+  selAnnee.innerHTML = '<option value="">Toutes les années</option>' +
+    annees.map(a => `<option value="${a}">${a}</option>`).join('');
+  if (annees.includes(curAnnee)) selAnnee.value = curAnnee;
+
+  // Mois disponibles (filtrés par année si sélectionnée)
+  const anneeActive = selAnnee.value;
+  const moisDispos = [...new Set(
+    allRows
+      .filter(r => !anneeActive || String(r.mois_annee).slice(0,4) === anneeActive)
+      .map(r => String(r.mois_annee))
+      .filter(Boolean)
+  )].sort();
+
+  const MOIS_NOMS = ['','Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
+  function labelMois(v) {
+    const y = v.slice(0,4), mo = v.slice(4,6);
+    return `${MOIS_NOMS[parseInt(mo)]} ${y}`;
+  }
+
+  const selDebut = document.getElementById('f-mois-debut');
+  const selFin   = document.getElementById('f-mois-fin');
+  const curDebut = selDebut.value;
+  const curFin   = selFin.value;
+
+  const opts = moisDispos.map(m => `<option value="${m}">${labelMois(m)}</option>`).join('');
+  selDebut.innerHTML = '<option value="">Début</option>' + opts;
+  selFin.innerHTML   = '<option value="">Fin</option>'   + opts;
+
+  if (moisDispos.includes(curDebut)) selDebut.value = curDebut;
+  if (moisDispos.includes(curFin))   selFin.value   = curFin;
+
+  updatePeriodeLabel();
+
+  populateFilter('f-client',       allRows, 'client');
+  populateFilter('f-client-final', allRows, 'client_final');
+  populateFilter('f-collab',       allRows, 'collaborateur');
+}
+
+function updatePeriodeLabel() {
+  const debut = document.getElementById('f-mois-debut').value;
+  const fin   = document.getElementById('f-mois-fin').value;
+  const btn   = document.getElementById('btn-reset-periode');
+  const lbl   = document.getElementById('periode-label');
+  const MOIS_NOMS = ['','Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
+  function fmt(v) {
+    if (!v) return '';
+    return `${MOIS_NOMS[parseInt(v.slice(4,6))]} ${v.slice(0,4)}`;
+  }
+  if (debut || fin) {
+    lbl.textContent = (debut ? fmt(debut) : '…') + ' → ' + (fin ? fmt(fin) : '…');
+    btn.style.display = 'block';
+  } else {
+    lbl.textContent = '';
+    btn.style.display = 'none';
+  }
+}
+
+// ─── COMPARAISON ANNÉES ──────────────────────────────────────
+let anneeAxis   = 'mois';
+let anneeMetric = 'ca';
+
+const ANNEE_COLORS = ['#1e50a0','#f97316','#16a34a','#7c3aed','#0ea5e9','#ef4444','#ca8a04'];
+
+function getMetricVal(d, metric) {
+  if (metric === 'ca')    return d.ca    || 0;
+  if (metric === 'marge') return d.marge || 0;
+  if (metric === 'jours') return d.jours || 0;
+  if (metric === 'taux')  return d.ca > 0 ? Math.round((d.marge/d.ca)*1000)/10 : 0;
+  return 0;
+}
+function metricLabel(metric) {
+  return { ca:'CA HT', marge:'Marge brute', jours:'Jours facturés', taux:'Taux marge %' }[metric];
+}
+function metricFmt(metric, v) {
+  if (metric === 'ca' || metric === 'marge') return fmtEur(v);
+  if (metric === 'jours') return fmtNum(v,1) + 'j';
+  return fmtNum(v,1) + '%';
+}
+
+function renderAnnee(allFilteredRows) {
+  // Utiliser TOUTES les données (ignorer filtre année/période pour la comparaison)
+  // mais respecter les autres filtres (entité, client, collab…)
+  const entite = document.getElementById('f-entite').value;
+  const client = document.getElementById('f-client').value;
+  const cf     = document.getElementById('f-client-final').value;
+  const collab = document.getElementById('f-collab').value;
+  const type   = document.getElementById('f-type').value;
+  const regie  = document.getElementById('f-regie').value;
+
+  const rows = allRows.filter(r =>
+    (!entite || r.entite_collab === entite) &&
+    (!client || r.client === client) &&
+    (!cf     || r.client_final === cf) &&
+    (!collab || r.collaborateur === collab) &&
+    (!type   || r.interne_externe === type) &&
+    (!regie  || r.regie_forfait === regie)
+  );
+
+  // Années disponibles
+  const annees = [...new Set(rows.map(r => String(r.mois_annee).slice(0,4)))].sort();
+
+  // ── KPIs comparatifs par année ──
+  const kpiByAnnee = {};
+  annees.forEach(a => { kpiByAnnee[a] = { ca:0, cout:0, marge:0, jours:0, nb:0 }; });
+  rows.forEach(r => {
+    const a = String(r.mois_annee).slice(0,4);
+    if (!kpiByAnnee[a]) return;
+    kpiByAnnee[a].ca    += r.total_ht   || 0;
+    kpiByAnnee[a].cout  += r.cout_total || 0;
+    kpiByAnnee[a].marge += (r.total_ht||0) - (r.cout_total||0);
+    kpiByAnnee[a].jours += r.nb_jours   || 0;
+    kpiByAnnee[a].nb    += 1;
+  });
+
+  const kpisHtml = annees.map((a,i) => {
+    const d = kpiByAnnee[a];
+    const taux = d.ca > 0 ? d.marge/d.ca*100 : 0;
+    const col  = ANNEE_COLORS[i % ANNEE_COLORS.length];
+    // Delta vs année précédente
+    let deltaHtml = '';
+    if (i > 0) {
+      const prev = kpiByAnnee[annees[i-1]];
+      const dCA  = prev.ca > 0 ? ((d.ca - prev.ca)/prev.ca*100) : 0;
+      const sign = dCA >= 0 ? '+' : '';
+      const dcol = dCA >= 0 ? '#16a34a' : '#ef4444';
+      deltaHtml = `<div style="font-size:10px;color:${dcol};font-family:var(--mono);margin-top:2px">${sign}${fmtNum(dCA,1)}% vs ${annees[i-1]}</div>`;
+    }
+    return `
+      <div style="background:var(--bg2);border:1px solid var(--border);border-top:3px solid ${col};border-radius:10px;padding:14px 16px;min-width:160px;flex:1">
+        <div style="font-size:16px;font-weight:600;color:${col};font-family:var(--mono);margin-bottom:8px">${a}</div>
+        <div style="font-size:11px;color:var(--muted);font-family:var(--mono);text-transform:uppercase;letter-spacing:.05em">CA</div>
+        <div style="font-size:18px;font-weight:600;color:var(--text)">${fmtEur(d.ca)}</div>
+        ${deltaHtml}
+        <div style="margin-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <div><div style="font-size:10px;color:var(--muted)">Marge</div><div style="font-size:13px;font-weight:500;color:#f97316">${fmtEur(d.marge)}</div></div>
+          <div><div style="font-size:10px;color:var(--muted)">Taux</div><div style="font-size:13px;font-weight:500;color:${taux>=20?'#16a34a':taux>=10?'#f97316':'#ef4444'}">${fmtNum(taux,1)}%</div></div>
+          <div><div style="font-size:10px;color:var(--muted)">Jours</div><div style="font-size:13px;font-weight:500">${fmtNum(d.jours,1)}</div></div>
+          <div><div style="font-size:10px;color:var(--muted)">TJM</div><div style="font-size:13px;font-weight:500">${d.jours>0?fmtEur(d.ca/d.jours):'—'}</div></div>
+        </div>
+      </div>`;
+  }).join('');
+  document.getElementById('annee-kpis-wrap').innerHTML =
+    `<div style="display:flex;gap:12px;flex-wrap:wrap">${kpisHtml}</div>`;
+
+  // ── Données pour graphique et tableau selon axis ──
+  let labels = [];
+  const datasets = [];
+
+  if (anneeAxis === 'mois') {
+    // Mois 1-12 en abscisse, une série par année
+    const MOIS_COURTS = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
+    labels = MOIS_COURTS;
+    annees.forEach((a, i) => {
+      const byMois = Array(12).fill(0);
+      rows.filter(r => String(r.mois_annee).slice(0,4) === a).forEach(r => {
+        const mo = parseInt(String(r.mois_annee).slice(4,6)) - 1;
+        const val = anneeMetric === 'marge' ? (r.total_ht||0)-(r.cout_total||0)
+                  : anneeMetric === 'jours' ? (r.nb_jours||0)
+                  : anneeMetric === 'taux'  ? 0  // calculé après agrégation
+                  : (r.total_ht||0);
+        byMois[mo] += val;
+      });
+      // Pour taux, recalcul par mois
+      if (anneeMetric === 'taux') {
+        const caByMois    = Array(12).fill(0);
+        const margeByMois = Array(12).fill(0);
+        rows.filter(r => String(r.mois_annee).slice(0,4) === a).forEach(r => {
+          const mo = parseInt(String(r.mois_annee).slice(4,6)) - 1;
+          caByMois[mo]    += r.total_ht   || 0;
+          margeByMois[mo] += (r.total_ht||0) - (r.cout_total||0);
+        });
+        for (let m=0; m<12; m++) byMois[m] = caByMois[m]>0 ? Math.round(margeByMois[m]/caByMois[m]*1000)/10 : 0;
+      }
+      const col = ANNEE_COLORS[i % ANNEE_COLORS.length];
+      datasets.push({ label: a, data: byMois, borderColor: col, backgroundColor: col+'25', borderWidth:2, borderRadius:3, tension:0.3, fill:false, type:'line', pointRadius:3 });
+    });
+    document.getElementById('annee-chart-label').textContent = `${metricLabel(anneeMetric)} par mois — comparaison années`;
+    document.getElementById('annee-table-title').textContent = `${metricLabel(anneeMetric)} par mois`;
+
+  } else {
+    // Axe = client / collaborateur / entite : top N en abscisse, une barre par année
+    const KEY = anneeAxis === 'entite' ? 'entite_collab' : anneeAxis;
+    const allKeys = [...new Set(rows.map(r => r[KEY] || 'N/A'))];
+
+    // Top 12 par CA global
+    const keyCA = {};
+    rows.forEach(r => { const k=r[KEY]||'N/A'; keyCA[k]=(keyCA[k]||0)+(r.total_ht||0); });
+    labels = allKeys.sort((a,b)=>(keyCA[b]||0)-(keyCA[a]||0)).slice(0,12);
+
+    annees.forEach((a, i) => {
+      const byKey = {};
+      rows.filter(r => String(r.mois_annee).slice(0,4) === a).forEach(r => {
+        const k = r[KEY] || 'N/A';
+        if (!byKey[k]) byKey[k] = { ca:0, cout:0, jours:0, marge:0 };
+        byKey[k].ca    += r.total_ht   || 0;
+        byKey[k].cout  += r.cout_total || 0;
+        byKey[k].jours += r.nb_jours   || 0;
+        byKey[k].marge += (r.total_ht||0) - (r.cout_total||0);
+      });
+      const data = labels.map(k => {
+        const d = byKey[k] || { ca:0, cout:0, jours:0, marge:0 };
+        return getMetricVal(d, anneeMetric);
+      });
+      const col = ANNEE_COLORS[i % ANNEE_COLORS.length];
+      datasets.push({ label: a, data, backgroundColor: col+'60', borderColor: col, borderWidth:1.5, borderRadius:4 });
+    });
+    const axisLabel = { client:'client', collaborateur:'collaborateur', entite:'entité' }[anneeAxis];
+    document.getElementById('annee-chart-label').textContent = `${metricLabel(anneeMetric)} par ${axisLabel} — comparaison années`;
+    document.getElementById('annee-table-title').textContent = `${metricLabel(anneeMetric)} par ${axisLabel}`;
+  }
+
+  // ── Chart ──
+  destroyChart('annee');
+  charts['annee'] = new Chart(document.getElementById('chart-annee'), {
+    type: anneeAxis === 'mois' ? 'line' : 'bar',
+    data: { labels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode:'index', intersect:false },
+      plugins: {
+        legend: { labels: { color:'#5a7296', font:{size:11}, boxWidth:12, padding:14 } },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${ctx.dataset.label} : ${metricFmt(anneeMetric, ctx.parsed.y)}`
+          }
+        }
+      },
+      scales: {
+        x: { grid:{ color:'rgba(15,40,80,0.06)' }, ticks:{ color:'#5a7296', font:{size:11} } },
+        y: { grid:{ color:'rgba(15,40,80,0.06)' }, ticks:{ color:'#5a7296', font:{size:11},
+          callback: v => anneeMetric==='taux'?v+'%' : anneeMetric==='jours'?v+'j' : (v/1000).toFixed(0)+'k€' } }
+      }
+    }
+  });
+
+  // ── Tableau comparatif ──
+  const thead = document.querySelector('#tbl-annee thead');
+  const tbody = document.querySelector('#tbl-annee tbody');
+
+  if (anneeAxis === 'mois') {
+    const MOIS_LONGS = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+    thead.innerHTML = `<tr><th>Mois</th>${annees.map((a,i)=>`<th style="color:${ANNEE_COLORS[i%ANNEE_COLORS.length]}">${a}</th>`).join('')}${annees.length>1?'<th style="color:var(--muted)">Évolution</th>':''}</tr>`;
+
+    const rowsByMoisAnnee = {};
+    rows.forEach(r => {
+      const key = `${String(r.mois_annee).slice(0,4)}|${String(r.mois_annee).slice(4,6)}`;
+      if (!rowsByMoisAnnee[key]) rowsByMoisAnnee[key] = { ca:0, cout:0, jours:0 };
+      rowsByMoisAnnee[key].ca    += r.total_ht   || 0;
+      rowsByMoisAnnee[key].cout  += r.cout_total || 0;
+      rowsByMoisAnnee[key].jours += r.nb_jours   || 0;
+      rowsByMoisAnnee[key].marge = rowsByMoisAnnee[key].ca - rowsByMoisAnnee[key].cout;
+    });
+
+    tbody.innerHTML = Array.from({length:12}, (_,mo) => {
+      const moStr = String(mo+1).padStart(2,'0');
+      const vals  = annees.map(a => {
+        const d = rowsByMoisAnnee[`${a}|${moStr}`] || { ca:0, cout:0, jours:0, marge:0 };
+        return getMetricVal(d, anneeMetric);
+      });
+      if (vals.every(v=>v===0)) return '';
+      let evol = '';
+      if (annees.length > 1 && vals[0] > 0) {
+        const last = vals[vals.length-1], first = vals[0];
+        const d = (last-first)/first*100;
+        evol = `<td class="td-right" style="color:${d>=0?'#16a34a':'#ef4444'}">${d>=0?'+':''}${fmtNum(d,1)}%</td>`;
+      }
+      return `<tr><td>${MOIS_LONGS[mo]}</td>${vals.map(v=>`<td class="td-right">${metricFmt(anneeMetric,v)}</td>`).join('')}${evol}</tr>`;
+    }).join('') +
+    (() => {
+      // Ligne total
+      const totals = annees.map(a => {
+        const d = kpiByAnnee[a] || { ca:0, cout:0, jours:0, marge:0 };
+        return getMetricVal(d, anneeMetric);
+      });
+      let evolTotal = '';
+      if (annees.length > 1 && totals[0] > 0) {
+        const d = (totals[totals.length-1]-totals[0])/totals[0]*100;
+        evolTotal = `<td class="td-right" style="font-weight:500;color:${d>=0?'#16a34a':'#ef4444'}">${d>=0?'+':''}${fmtNum(d,1)}%</td>`;
+      }
+      return `<tr style="border-top:2px solid var(--border2);font-weight:500"><td>Total</td>${totals.map(v=>`<td class="td-right">${metricFmt(anneeMetric,v)}</td>`).join('')}${evolTotal}</tr>`;
+    })();
+
+  } else {
+    const KEY = anneeAxis === 'entite' ? 'entite_collab' : anneeAxis;
+    thead.innerHTML = `<tr><th>${anneeAxis==='entite'?'Entité':anneeAxis.charAt(0).toUpperCase()+anneeAxis.slice(1)}</th>${annees.map((a,i)=>`<th style="color:${ANNEE_COLORS[i%ANNEE_COLORS.length]}">${a}</th>`).join('')}${annees.length>1?'<th style="color:var(--muted)">Évolution</th>':''}</tr>`;
+
+    const byKeyAnnee = {};
+    rows.forEach(r => {
+      const k = r[KEY]||'N/A';
+      const a = String(r.mois_annee).slice(0,4);
+      if (!byKeyAnnee[k]) byKeyAnnee[k] = {};
+      if (!byKeyAnnee[k][a]) byKeyAnnee[k][a] = { ca:0, cout:0, jours:0, marge:0 };
+      byKeyAnnee[k][a].ca    += r.total_ht   || 0;
+      byKeyAnnee[k][a].cout  += r.cout_total || 0;
+      byKeyAnnee[k][a].jours += r.nb_jours   || 0;
+      byKeyAnnee[k][a].marge += (r.total_ht||0)-(r.cout_total||0);
+    });
+
+    const keysSorted = Object.keys(byKeyAnnee).sort((a,b) => {
+      const totA = Object.values(byKeyAnnee[a]).reduce((s,d)=>s+(d.ca||0),0);
+      const totB = Object.values(byKeyAnnee[b]).reduce((s,d)=>s+(d.ca||0),0);
+      return totB - totA;
+    });
+
+    tbody.innerHTML = keysSorted.map(k => {
+      const vals = annees.map(a => getMetricVal(byKeyAnnee[k][a]||{}, anneeMetric));
+      let evol = '';
+      if (annees.length > 1 && vals[0] > 0) {
+        const d = (vals[vals.length-1]-vals[0])/vals[0]*100;
+        evol = `<td class="td-right" style="color:${d>=0?'#16a34a':'#ef4444'}">${d>=0?'+':''}${fmtNum(d,1)}%</td>`;
+      }
+      return `<tr><td>${k}</td>${vals.map(v=>`<td class="td-right">${metricFmt(anneeMetric,v)}</td>`).join('')}${evol}</tr>`;
+    }).join('');
+  }
+}
+
+function renderAll() {
+  const rows = getFiltered();
+  document.getElementById('filter-count').textContent = `${rows.length} lignes filtrées`;
+
+  renderKPIs(rows);
+  if (activeTab === 'vue-globale')       renderCharts(rows);
+  if (activeTab === 'par-annee')         renderAnnee(rows);
+  if (activeTab === 'par-client')        renderTableClient(rows);
+  if (activeTab === 'par-collaborateur') renderTableCollab(rows);
+  if (activeTab === 'par-affaire')       renderTableAffaire(rows);
+  if (activeTab === 'detail')            renderTableDetail(rows);
+}
+
+// ─── EVENTS ──────────────────────────────────────────────────
+['f-entite','f-client','f-client-final','f-collab','f-type','f-regie'].forEach(id => {
+  document.getElementById(id).addEventListener('change', renderAll);
+});
+
+document.getElementById('f-annee').addEventListener('change', () => {
+  document.getElementById('f-mois-debut').value = '';
+  document.getElementById('f-mois-fin').value = '';
+  buildFilters();
+  renderAll();
+});
+
+document.getElementById('f-mois-debut').addEventListener('change', () => {
+  const debut = document.getElementById('f-mois-debut').value;
+  const fin   = document.getElementById('f-mois-fin').value;
+  if (debut && fin && fin < debut) document.getElementById('f-mois-fin').value = debut;
+  updatePeriodeLabel();
+  renderAll();
+});
+
+document.getElementById('f-mois-fin').addEventListener('change', () => {
+  const debut = document.getElementById('f-mois-debut').value;
+  const fin   = document.getElementById('f-mois-fin').value;
+  if (debut && fin && debut > fin) document.getElementById('f-mois-debut').value = fin;
+  updatePeriodeLabel();
+  renderAll();
+});
+
+document.getElementById('btn-reset-periode').addEventListener('click', () => {
+  document.getElementById('f-mois-debut').value = '';
+  document.getElementById('f-mois-fin').value = '';
+  updatePeriodeLabel();
+  renderAll();
+});
+
+document.getElementById('btn-reset').addEventListener('click', () => {
+  ['f-entite','f-annee','f-mois-debut','f-mois-fin','f-client','f-client-final','f-collab','f-type','f-regie']
+    .forEach(id => document.getElementById(id).value = '');
+  buildFilters();
+  updatePeriodeLabel();
+  renderAll();
+});
+
+document.querySelectorAll('.tab').forEach(t => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    activeTab = t.dataset.tab;
+    document.getElementById('tab-' + activeTab).classList.add('active');
+    renderAll();
+  });
+});
+
+// Axe et métrique pour l'onglet Années
+document.addEventListener('click', e => {
+  const axisBtn = e.target.closest('.annee-axis-btn');
+  if (axisBtn) {
+    document.querySelectorAll('.annee-axis-btn').forEach(b => {
+      b.style.background = 'var(--bg2)'; b.style.color = 'var(--muted)';
+      b.style.borderColor = 'var(--border)';
+    });
+    axisBtn.style.background = 'var(--accent2)';
+    axisBtn.style.color = '#fff';
+    axisBtn.style.borderColor = 'var(--accent2)';
+    anneeAxis = axisBtn.dataset.axis;
+    if (activeTab === 'par-annee') renderAnnee([]);
+    return;
+  }
+  const metricBtn = e.target.closest('.annee-metric-btn');
+  if (metricBtn) {
+    document.querySelectorAll('.annee-metric-btn').forEach(b => {
+      b.style.background = 'var(--bg2)'; b.style.color = 'var(--muted)';
+      b.style.borderColor = 'var(--border)';
+    });
+    metricBtn.style.background = 'var(--accent2)';
+    metricBtn.style.color = '#fff';
+    metricBtn.style.borderColor = 'var(--accent2)';
+    anneeMetric = metricBtn.dataset.metric;
+    if (activeTab === 'par-annee') renderAnnee([]);
+    return;
+  }
+});
+
+// ─── EMPTY STATE ─────────────────────────────────────────────
+function showEmpty() {
+  document.getElementById('main-content').innerHTML = `
+    <div class="empty-db">
+      <h2>Aucune donnée disponible</h2>
+      <p>Importez votre premier fichier mensuel depuis<br>
+      l'<a href="admin.html">interface d'administration</a> pour afficher le dashboard.</p>
+    </div>`;
+}
+
+// ─── INIT ────────────────────────────────────────────────────
+async function init() {
+  try {
+    await db.open();
+  } catch(err) {
+    document.getElementById('main-content').innerHTML = `
+      <div class="empty-db">
+        <h2>Erreur d'ouverture de la base</h2>
+        <p style="color:#fb7185;font-family:monospace;font-size:12px;margin-top:8px">${err.message || err}</p>
+        <p style="margin-top:12px">Essayez de <a href="admin.html">retourner dans l'admin</a> et de réimporter vos données.</p>
+      </div>`;
+    return;
+  }
+
+  let count = 0;
+  try {
+    count = await db.productions.count();
+  } catch(err) {
+    document.getElementById('main-content').innerHTML = `
+      <div class="empty-db">
+        <h2>Erreur de lecture</h2>
+        <p style="color:#fb7185;font-family:monospace;font-size:12px;margin-top:8px">${err.message || err}</p>
+      </div>`;
+    return;
+  }
+
+  if (!count) { showEmpty(); return; }
+
+  allRows = await db.productions.toArray();
+  buildFilters();
+
+  const lastImport = await db.imports_log.orderBy('imported_at').last();
+  if (lastImport) {
+    const d = new Date(lastImport.imported_at);
+    document.getElementById('last-update').textContent =
+      `Mis à jour le ${d.toLocaleDateString('fr-FR')} à ${d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}`;
+  }
+
+  renderAll();
+}
+
+init();
+
+// ─── DIAGNOSTIC ──────────────────────────────────────────────
+document.getElementById('logo-diag').addEventListener('click', async () => {
+  const panel = document.getElementById('diag-panel');
+  const diag  = document.getElementById('diag-content');
+  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+  if (panel.style.display === 'none') return;
+
+  try {
+    await db.open();
+    const nbProd   = await db.productions.count();
+    const nbImport = await db.imports_log.count();
+    const mois     = nbProd > 0
+      ? [...new Set((await db.productions.orderBy('mois_annee').keys()))].map(formatMois).join(', ')
+      : '—';
+    const lastLog  = await db.imports_log.orderBy('imported_at').last();
+    const lastDate = lastLog ? new Date(lastLog.imported_at).toLocaleString('fr-FR') : '—';
+    diag.innerHTML = `
+      <div>DB version : <span style="color:#e8e8ea">${db.verno}</span></div>
+      <div>Lignes productions : <span style="color:#6ee7b7">${nbProd.toLocaleString('fr-FR')}</span></div>
+      <div>Imports enregistrés : <span style="color:#6ee7b7">${nbImport}</span></div>
+      <div>Mois présents : <span style="color:#fbbf24">${mois}</span></div>
+      <div>Dernier import : <span style="color:#e8e8ea">${lastDate}</span></div>
+      <div style="margin-top:6px;color:#6b6b72">Origine : ${location.origin}${location.pathname}</div>
+    `;
+  } catch(err) {
+    diag.innerHTML = `<span style="color:#ef4444">Erreur : ${err.message || err}</span>`;
+  }
+});
+</script>
+</body>
+</html>

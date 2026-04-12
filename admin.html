@@ -1,0 +1,1833 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — Production Mensuelle</title>
+<script src="https://unpkg.com/dexie@3.2.4/dist/dexie.min.js"></script>
+<script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root {
+    --bg:      #f0f4f8;
+    --bg2:     #ffffff;
+    --bg3:     #e8edf3;
+    --border:  rgba(15,40,80,0.10);
+    --border2: rgba(15,40,80,0.20);
+    --text:    #0d1f3c;
+    --muted:   #5a7296;
+    --accent:  #f97316;
+    --accent2: #1e50a0;
+    --danger:  #ef4444;
+    --warn:    #f97316;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Sora', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    min-height: 100vh;
+  }
+
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 0 32px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    background: var(--bg2);
+    z-index: 10;
+    box-shadow: 0 1px 0 var(--border);
+  }
+
+  .logo {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--accent2);
+    letter-spacing: 0.02em;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+  }
+
+  .logo-dot {
+    width: 8px; height: 8px;
+    background: var(--accent);
+    border-radius: 3px;
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%,100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .badge-app {
+    font-family: var(--mono);
+    font-size: 11px;
+    background: rgba(249,115,22,0.12);
+    color: #f97316;
+    padding: 3px 10px;
+    border-radius: 20px;
+    border: 1px solid rgba(249,115,22,0.25);
+    font-weight: 500;
+  }
+
+  a.nav-link {
+    font-size: 13px;
+    color: var(--muted);
+    text-decoration: none;
+    border: 1px solid var(--border);
+    padding: 5px 14px;
+    border-radius: 6px;
+    transition: all 0.15s;
+  }
+
+  a.nav-link:hover {
+    color: var(--text);
+    border-color: var(--border2);
+    background: var(--bg2);
+  }
+
+  main {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 40px 24px;
+  }
+
+  .page-title {
+    font-size: 22px;
+    font-weight: 300;
+    letter-spacing: -0.02em;
+    margin-bottom: 6px;
+  }
+
+  .page-title span { color: #f97316; font-weight: 500; }
+
+  .page-sub {
+    color: var(--muted);
+    font-size: 13px;
+    margin-bottom: 36px;
+  }
+
+  .section { margin-bottom: 40px; }
+
+  .section-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent2);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--accent);
+    font-weight: 500;
+  }
+
+  /* DROPZONE */
+  .dropzone {
+    border: 1.5px dashed var(--border2);
+    border-radius: 12px;
+    padding: 48px 32px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: var(--bg2);
+    position: relative;
+  }
+
+  .dropzone:hover, .dropzone.dragover {
+    border-color: #f97316;
+    background: rgba(249,115,22,0.04);
+  }
+
+  .dropzone input[type=file] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+    width: 100%;
+    height: 100%;
+  }
+
+  .dz-icon {
+    width: 40px; height: 40px;
+    margin: 0 auto 16px;
+    opacity: 0.4;
+  }
+
+  .dz-title {
+    font-size: 15px;
+    font-weight: 500;
+    margin-bottom: 6px;
+  }
+
+  .dz-sub {
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  /* PREVIEW */
+  #preview-section { display: none; }
+
+  .preview-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(15,40,80,0.08);
+  }
+
+  .preview-header {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .preview-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .chip {
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    border: 1px solid;
+  }
+
+  .chip-green { background: #dcfce7; color: #15803d; border-color: #bbf7d0; }
+  .chip-blue  { background: rgba(30,80,160,0.10); color: #1e50a0; border-color: rgba(30,80,160,0.20); }
+  .chip-warn  { background: rgba(249,115,22,0.10); color: #c2410c; border-color: rgba(249,115,22,0.25); }
+  .chip-red   { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
+
+  .preview-kpis {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    background: var(--border);
+  }
+
+  .kpi {
+    background: var(--bg2);
+    padding: 16px 18px;
+  }
+
+  .kpi-label {
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 6px;
+    font-family: var(--mono);
+  }
+
+  .kpi-val {
+    font-size: 20px;
+    font-weight: 500;
+    font-family: var(--mono);
+    letter-spacing: -0.02em;
+  }
+
+  .kpi-val.green { color: #1e50a0; font-weight:600; }
+  .kpi-val.blue { color: #0ea5e9; }
+  .kpi-val.warn { color: #f97316; }
+
+  .preview-table-wrap {
+    max-height: 220px;
+    overflow-y: auto;
+    padding: 0;
+  }
+
+  .preview-table-wrap::-webkit-scrollbar { width: 4px; }
+  .preview-table-wrap::-webkit-scrollbar-track { background: transparent; }
+  .preview-table-wrap::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+
+  th {
+    background: var(--bg3);
+    color: var(--accent2);
+    font-family: var(--mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 8px 12px;
+    text-align: left;
+    position: sticky;
+    top: 0;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+
+  td {
+    padding: 7px 12px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+    white-space: nowrap;
+  }
+
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(30,80,160,0.04); }
+
+  .actions {
+    display: flex;
+    gap: 10px;
+    padding: 14px 18px;
+    border-top: 1px solid var(--border);
+  }
+
+  .btn {
+    padding: 9px 20px;
+    border-radius: 7px;
+    font-size: 13px;
+    font-family: var(--sans);
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    transition: all 0.15s;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #fff;
+    font-weight: 500;
+  }
+  .btn-primary:hover { background: #ea6a05; transform: translateY(-1px); }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--border);
+  }
+  .btn-ghost:hover { border-color: var(--border2); color: var(--text); }
+
+  .btn-danger {
+    background: transparent;
+    color: var(--danger);
+    border: 1px solid rgba(248,113,113,0.2);
+  }
+  .btn-danger:hover { background: rgba(248,113,113,0.08); }
+
+  /* TOAST */
+  #toast {
+    position: fixed;
+    bottom: 28px;
+    right: 28px;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-family: var(--mono);
+    font-weight: 500;
+    opacity: 0;
+    transform: translateY(8px);
+    transition: all 0.3s;
+    pointer-events: none;
+    z-index: 100;
+    max-width: 340px;
+  }
+
+  #toast.show { opacity: 1; transform: translateY(0); }
+  #toast.success { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
+  #toast.error { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+  #toast.warn { background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; }
+
+  /* HISTORY */
+  .history-list { display: flex; flex-direction: column; gap: 8px; }
+
+  .history-item {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    transition: border-color 0.15s;
+  }
+
+  .history-item:hover { border-color: #f97316; }
+
+  .history-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .history-month {
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--accent2);
+    min-width: 72px;
+  }
+
+  .history-stats {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .stat {
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .stat strong {
+    color: var(--text);
+    font-weight: 500;
+  }
+
+  .history-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .history-date {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 48px 32px;
+    color: var(--muted);
+    background: var(--bg2);
+    border: 1px dashed var(--border);
+    border-radius: 10px;
+  }
+
+  .empty-state p { font-size: 13px; margin-top: 8px; }
+
+  /* CONFIRM MODAL */
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+  }
+
+  .modal-backdrop.open { opacity: 1; pointer-events: all; }
+
+  .modal {
+    background: var(--bg2);
+    border: 1px solid var(--border2);
+    border-radius: 12px;
+    padding: 28px;
+    width: 360px;
+    transform: scale(0.95);
+    transition: transform 0.2s;
+  }
+
+  .modal-backdrop.open .modal { transform: scale(1); }
+
+  .modal-title {
+    font-size: 16px;
+    font-weight: 500;
+    margin-bottom: 8px;
+  }
+
+  .modal-body {
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 24px;
+    line-height: 1.6;
+  }
+
+  .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+
+  /* LOADING OVERLAY */
+  .loading-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 40;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .loading-overlay.active { display: flex; }
+
+  .spinner {
+    width: 32px; height: 32px;
+    border: 2px solid var(--border2);
+    border-top-color: #f97316;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .loading-text {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: #f97316;
+  }
+
+  /* CORRECTION SECTION */
+  .corr-dropzone {
+    border: 1.5px dashed var(--border2);
+    border-radius: 10px;
+    padding: 28px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: var(--bg2);
+    position: relative;
+  }
+  .corr-dropzone:hover { border-color: var(--warn); background: rgba(251,191,36,0.03); }
+  .corr-dropzone.dragover { border-color: var(--warn); background: rgba(251,191,36,0.06); }
+  .corr-dropzone input[type=file] { position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%; }
+
+  .diff-table-wrap { max-height: 300px; overflow-y: auto; }
+  .diff-table-wrap::-webkit-scrollbar { width: 4px; }
+  .diff-table-wrap::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+  .diff-old { color: var(--danger); text-decoration: line-through; font-family: var(--mono); font-size: 11px; }
+  .diff-new { color: #f97316; font-family: var(--mono); font-size: 11px; font-weight: 500; }
+  .diff-arrow { color: var(--muted); margin: 0 4px; }
+
+  .corr-log-item {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .corr-log-item:hover { border-color: var(--border2); }
+  .corr-log-date { font-family: var(--mono); font-size: 11px; color: var(--muted); white-space: nowrap; }
+  .corr-log-detail { font-size: 12px; color: var(--text); line-height: 1.6; }
+  .corr-log-detail strong { color: #f97316; }
+
+  .tabs-admin {
+    display: flex;
+    gap: 0;
+    margin-bottom: 24px;
+    border-bottom: 1px solid var(--border);
+  }
+  .tab-admin {
+    padding: 10px 20px;
+    font-size: 12px;
+    font-family: var(--mono);
+    color: var(--muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: all 0.15s;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    background: none;
+    border-top: none;
+    border-left: none;
+    border-right: none;
+  }
+  .tab-admin:hover { color: var(--text); }
+  .tab-admin.active { color: var(--accent2); border-bottom-color: #f97316; font-weight:600; }
+  .tab-admin-content { display: none; }
+  .tab-admin-content.active { display: block; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-dot"></div>
+    CNEXT · BI Activité
+  </div>
+  <div class="header-right">
+    <span class="badge-app">ADMIN</span>
+    <a href="dashboard.html" class="nav-link">→ Dashboard</a>
+  </div>
+</header>
+
+<main>
+  <h1 class="page-title">Administration <span>des données</span></h1>
+  <p class="page-sub">Import mensuel, corrections manuelles et nettoyage des données en base.</p>
+
+  <!-- TABS -->
+  <div class="tabs-admin">
+    <button class="tab-admin active" data-atab="imports">Import mensuel</button>
+    <button class="tab-admin" data-atab="corrections">Corrections & nettoyage</button>
+    <button class="tab-admin" data-atab="referentiels">Référentiels</button>
+  </div>
+
+  <!-- ═══ TAB : IMPORT MENSUEL ═══ -->
+  <div class="tab-admin-content active" id="atab-imports">
+
+  <!-- UPLOAD -->
+  <div class="section">
+    <div class="section-label" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <span>Importer un fichier de production</span>
+      <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;color:var(--text);font-family:var(--mono)">
+          <input type="checkbox" id="rule-cnext" checked style="accent-color:#f97316;width:14px;height:14px">
+          Supprimer lignes CNEXT interne
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;color:var(--text);font-family:var(--mono)">
+          <input type="checkbox" id="rule-greentech" checked style="accent-color:#f97316;width:14px;height:14px">
+          Appliquer coûts GreenTech
+        </label>
+      </div>
+    </div>
+    <div id="mode-desc" style="font-size:11px;color:var(--muted);margin-bottom:10px;padding:8px 12px;background:var(--bg3);border-radius:6px;line-height:1.6;display:flex;gap:20px;align-items:center;flex-wrap:wrap">
+      <span>Mode import :</span>
+      <label style="display:flex;align-items:center;gap:5px;cursor:pointer">
+        <input type="radio" name="import-mode" id="mode-fusion" value="fusion" checked style="accent-color:#f97316">
+        <span><strong style="color:var(--accent2)">Fusion</strong> — ajoute et met à jour ligne par ligne</span>
+      </label>
+      <label style="display:flex;align-items:center;gap:5px;cursor:pointer">
+        <input type="radio" name="import-mode" id="mode-remplacement" value="remplacement" style="accent-color:#f97316">
+        <span><strong style="color:#ef4444">Remplacement</strong> — écrase tout le mois/entité</span>
+      </label>
+    </div>
+    <div class="dropzone" id="dropzone">
+      <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
+      <svg class="dz-icon" viewBox="0 0 40 40" fill="none">
+        <rect x="6" y="8" width="28" height="28" rx="4" stroke="currentColor" stroke-width="1.5"/>
+        <path d="M14 20h12M20 14v12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      <div class="dz-title">Glissez votre fichier mensuel ici</div>
+      <div class="dz-sub">ProductionMensuelle_AAAAMMJJ.xlsx · Les règles de nettoyage s'appliquent automatiquement</div>
+    </div>
+  </div>
+
+  <!-- PREVIEW -->
+  <div class="section" id="preview-section">
+    <div class="section-label">Aperçu — avant import</div>
+    <div class="preview-card">
+      <div class="preview-header">
+        <div class="preview-meta">
+          <span id="prev-filename" class="chip chip-blue">—</span>
+          <span id="prev-mois" class="chip chip-green">—</span>
+          <span id="prev-lignes" class="chip chip-warn">—</span>
+          <span id="prev-status" class="chip chip-green" style="display:none">—</span>
+        </div>
+      </div>
+      <div class="preview-kpis" id="prev-kpis"></div>
+      <div class="preview-table-wrap">
+        <table id="prev-table">
+          <thead id="prev-thead"></thead>
+          <tbody id="prev-tbody"></tbody>
+        </table>
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary" id="btn-import">Confirmer l'import</button>
+        <button class="btn btn-ghost" id="btn-cancel">Annuler</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- EXPORT -->
+  <div class="section">
+    <div class="section-label" style="display:flex;justify-content:space-between;align-items:center">
+      <span>Export des données traitées</span>
+      <span id="export-count" style="font-size:11px;color:var(--muted);font-family:var(--mono)"></span>
+    </div>
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+      <div>
+        <div style="font-size:13px;font-weight:500;margin-bottom:3px">Toutes les données en base</div>
+        <div style="font-size:11px;color:var(--muted)">Excel · données nettoyées · colonnes enrichies (marge, taux, TJM)</div>
+      </div>
+      <button class="btn btn-primary" id="btn-export" style="padding:8px 18px;font-size:13px">↓ Télécharger Excel</button>
+    </div>
+  </div>
+
+  <!-- HISTORIQUE -->
+  <div class="section">
+    <div class="section-label">Historique des imports</div>
+    <div class="history-list" id="history-list">
+      <div class="empty-state">
+        <strong>Aucune donnée importée</strong>
+        <p>Importez votre premier fichier mensuel ci-dessus.</p>
+      </div>
+    </div>
+  </div>
+
+  </div><!-- /atab-imports -->
+
+  <!-- ═══ TAB : CORRECTIONS & NETTOYAGE ═══ -->
+  <div class="tab-admin-content" id="atab-corrections">
+
+    <!-- Import fichier de correction -->
+    <div class="section">
+      <div class="section-label">Importer un fichier de correction</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.6">
+        Deux types de fichiers acceptés — la détection est automatique :<br>
+        <strong style="color:var(--text)">Format production</strong> (même colonnes que le fichier mensuel) → correction ligne à ligne, jointure sur
+        <code style="font-family:var(--mono);font-size:11px;background:var(--bg3);padding:1px 5px;border-radius:3px">Mois/Année + Réf. affaire + Collaborateur</code>.<br>
+        <strong style="color:var(--text)">Format référentiel</strong> (4 colonnes : Collaborateur, Client, Client final, Coût/j) → mise à jour du référentiel GreenTech et redirection vers l'onglet Référentiels.
+      </p>
+      <div class="corr-dropzone" id="corr-dropzone">
+        <input type="file" id="corrFileInput" accept=".xlsx,.xls,.csv">
+        <svg width="32" height="32" viewBox="0 0 32 32" fill="none" style="margin:0 auto 12px;opacity:0.35">
+          <rect x="4" y="6" width="24" height="22" rx="3" stroke="currentColor" stroke-width="1.3"/>
+          <path d="M10 16h12M16 10v12" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          <path d="M10 6V4M22 6V4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+        </svg>
+        <div style="font-size:14px;font-weight:500;margin-bottom:4px">Glissez le fichier de correction ici</div>
+        <div style="font-size:12px;color:var(--muted)">Même format que les fichiers mensuels · Aperçu diff avant application</div>
+      </div>
+    </div>
+
+    <!-- Diff preview -->
+    <div class="section" id="corr-preview-section" style="display:none">
+      <div class="section-label">Aperçu des modifications</div>
+      <div class="preview-card">
+        <div class="preview-header">
+          <div class="preview-meta">
+            <span id="corr-prev-filename" class="chip chip-blue">—</span>
+            <span id="corr-prev-matches" class="chip chip-green">—</span>
+            <span id="corr-prev-new" class="chip chip-warn">—</span>
+            <span id="corr-prev-nochange" class="chip" style="background:var(--bg3);color:var(--muted);border:1px solid var(--border)">—</span>
+          </div>
+        </div>
+        <div class="preview-kpis" id="corr-prev-kpis"></div>
+        <div class="diff-table-wrap">
+          <table id="corr-diff-table"><thead></thead><tbody></tbody></table>
+        </div>
+        <div class="actions">
+          <button class="btn btn-primary" id="btn-apply-corr">Appliquer les corrections</button>
+          <button class="btn btn-ghost" id="btn-cancel-corr">Annuler</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Nettoyage — statut -->
+    <div class="section">
+      <div class="section-label">Nettoyage des données</div>
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:16px 18px">
+        <p style="font-size:12px;color:var(--muted);margin-bottom:16px;line-height:1.6">
+          Les règles de nettoyage s'appliquent <strong style="color:#f97316">automatiquement à chaque import</strong>
+          et lors de toute mise à jour du référentiel GreenTech.<br>
+          Le bouton ci-dessous permet de forcer un recalcul manuel si nécessaire (ex. après correction du référentiel sur des données anciennes).
+        </p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+          <div style="background:var(--bg3);border-radius:6px;padding:12px">
+            <div style="font-size:10px;color:var(--muted);font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Lignes en base</div>
+            <div style="font-size:18px;font-weight:500;font-family:var(--mono)" id="net-total-lignes">—</div>
+          </div>
+          <div style="background:var(--bg3);border-radius:6px;padding:12px">
+            <div style="font-size:10px;color:var(--muted);font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Lignes GreenTech en base</div>
+            <div style="font-size:18px;font-weight:500;font-family:var(--mono);color:var(--warn)" id="net-greentech-lignes">—</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <button class="btn btn-ghost" id="btn-analyse-nettoyage" style="font-size:12px;padding:7px 16px">Analyser la base</button>
+          <button class="btn btn-danger" id="btn-appliquer-nettoyage" style="font-size:12px;padding:7px 16px" disabled>Forcer le recalcul complet</button>
+          <span id="nettoyage-result" style="font-size:12px;color:var(--muted);display:none"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Historique corrections -->
+    <div class="section">
+      <div class="section-label">Historique des corrections</div>
+      <div class="history-list" id="corr-history-list">
+        <div class="empty-state">
+          <strong>Aucune correction appliquée</strong>
+          <p>L'historique des opérations de correction apparaîtra ici.</p>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /atab-corrections -->
+
+  <!-- ═══ TAB : RÉFÉRENTIELS ═══ -->
+  <div class="tab-admin-content" id="atab-referentiels">
+
+    <!-- GreenTech -->
+    <div class="section">
+      <div class="section-label" style="display:flex;justify-content:space-between;align-items:center">
+        <span>Référentiel coûts CNEXT GreenTech</span>
+        <span id="greentech-status" style="font-size:11px;color:var(--muted)">Non chargé</span>
+      </div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.6">
+        Table de référence des coûts journaliers des collaborateurs CNEXT GreenTech.
+        Utilisée automatiquement à chaque import et lors du nettoyage de la base.
+        Persistée entre sessions.
+      </p>
+      <div id="greentech-zone" style="background:var(--bg2);border:1px dashed var(--border2);border-radius:8px;padding:14px 18px;display:flex;align-items:center;gap:14px;cursor:pointer;transition:all 0.15s;position:relative">
+        <input type="file" id="greentechInput" accept=".xlsx,.xls" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" style="opacity:0.4;flex-shrink:0"><rect x="2" y="3" width="14" height="12" rx="2" stroke="currentColor" stroke-width="1.2"/><path d="M6 9h6M9 6v6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+        <div>
+          <div style="font-size:13px;font-weight:500" id="greentech-filename">Charger Correction_CENXTGreenTech.xlsx</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">Colonnes requises : Collaborateur · Coût/j</div>
+        </div>
+        <div id="greentech-badge" style="display:none;margin-left:auto;background:rgba(30,80,160,0.10);color:#1e50a0;border:1px solid rgba(30,80,160,0.20);border-radius:20px;padding:3px 10px;font-family:var(--mono);font-size:11px;white-space:nowrap;font-weight:500"></div>
+      </div>
+      <!-- Table du référentiel GreenTech -->
+      <div id="greentech-table-wrap" style="margin-top:14px;display:none">
+        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;overflow:hidden">
+          <table style="width:100%;border-collapse:collapse;font-size:12px">
+            <thead id="greentech-thead"></thead>
+            <tbody id="greentech-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /atab-referentiels -->
+
+</main>
+
+<!-- MODAL CONFIRM REPLACE -->
+<div class="modal-backdrop" id="modal-replace">
+  <div class="modal">
+    <div class="modal-title">Remplacer les données ?</div>
+    <div class="modal-body" id="modal-body">
+      Des données existent déjà pour ce mois. Cette action les remplacera définitivement.
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="modal-cancel">Annuler</button>
+      <button class="btn btn-danger" id="modal-confirm">Remplacer</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CONFIRM DELETE -->
+<div class="modal-backdrop" id="modal-delete">
+  <div class="modal">
+    <div class="modal-title">Supprimer ce mois ?</div>
+    <div class="modal-body" id="modal-delete-body">
+      Cette action est irréversible.
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="modal-delete-cancel">Annuler</button>
+      <button class="btn btn-danger" id="modal-delete-confirm">Supprimer</button>
+    </div>
+  </div>
+</div>
+
+<div class="loading-overlay" id="loading">
+  <div class="spinner"></div>
+  <div class="loading-text" id="loading-text">Traitement en cours...</div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ─── DB ──────────────────────────────────────────────────────
+const db = new Dexie('BiActivite');
+db.version(1).stores({
+  productions: '++id, mois_annee, import_id',
+  imports_log: '++id, mois_annee, imported_at'
+});
+db.version(2).stores({
+  productions: '++id, mois_annee, import_id',
+  imports_log: '++id, mois_annee, imported_at',
+  greentech_corrections: '++id, collaborateur'
+}).upgrade(() => {});
+db.version(3).stores({
+  productions: '++id, mois_annee, import_id',
+  imports_log: '++id, mois_annee, imported_at',
+  greentech_corrections: '++id, collaborateur',
+  corrections_log: '++id, applied_at'
+}).upgrade(() => {});
+
+// ─── COLONNES MAPPING ────────────────────────────────────────
+const COL = {
+  mois_annee:          'Mois/Année',
+  entite_collab:       'Entité du collab.',
+  matricule:           'Matricule (si interne)',
+  autre_id:            'Autre Id',
+  collaborateur:       'Collaborateur',
+  nom:                 'Nom',
+  prenom:              'Prénom',
+  fonction:            'Fonction',
+  competences:         'Compétences',
+  client:              'Client',
+  client_final:        'Client final',
+  entite_affaire:      "Entité de l'affaire",
+  ref_affaire:         'Réf. affaire',
+  commercial:          "Commercial de l'affaire",
+  objet_affaire:       "Objet de l'affaire",
+  volet_affaire:       "Volet de l'affaire",
+  ref_client:          'Référence client',
+  axes_analytiques:    'Axes analytiques du volet',
+  regie_forfait:       'Régie/Forfait',
+  nb_etp:              'Nb ETP',
+  nb_jours:            'Nb de jours',
+  nb_heures:           "Nb d'heures",
+  pv_jour:             'PV/j',
+  total_ht:            'Total HT',
+  valorisation:        'Valorisation',
+  interne_externe:     'Interne/Externe',
+  societe_intervenante:'Société intervenante',
+  cout_jour:           'Coût/j',
+  tj_theorique:        'TJ/j théorique',
+  reste_a_produire:    'Reste à produire'
+};
+
+// ─── STATE ───────────────────────────────────────────────────
+let pendingRows = [];
+let pendingMois = null;
+let pendingFilename = '';
+let deleteTargetMois = null;
+let greentechMap = {};  // collaborateur -> cout_jour corrigé
+
+// ─── UTILS ───────────────────────────────────────────────────
+function formatMois(m) {
+  if (!m) return '—';
+  const s = String(m);
+  const y = s.slice(0,4), mo = s.slice(4,6);
+  const names = ['','Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
+  return `${names[parseInt(mo)]} ${y}`;
+}
+
+function fmtEur(n) {
+  if (n == null || isNaN(n)) return '—';
+  return new Intl.NumberFormat('fr-FR', { style:'currency', currency:'EUR', maximumFractionDigits:0 }).format(n);
+}
+
+function fmtNum(n, dec=1) {
+  if (n == null || isNaN(n)) return '—';
+  return new Intl.NumberFormat('fr-FR', { minimumFractionDigits: dec, maximumFractionDigits: dec }).format(n);
+}
+
+function showToast(msg, type='success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `show ${type}`;
+  setTimeout(() => { t.className = ''; }, 3500);
+}
+
+function showLoading(txt='Traitement en cours...') {
+  document.getElementById('loading-text').textContent = txt;
+  document.getElementById('loading').classList.add('active');
+}
+
+function hideLoading() {
+  document.getElementById('loading').classList.remove('active');
+}
+
+// ─── PARSE XLSX ──────────────────────────────────────────────
+function parseFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const wb = XLSX.read(e.target.result, { type: 'array' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rawJson = XLSX.utils.sheet_to_json(ws, { defval: null });
+        if (!rawJson.length) return reject('Fichier vide');
+
+        // Normaliser les en-têtes : construire un mapping nom_lu -> nom_attendu
+        // pour gérer les variations d'encodage (û, é, etc.)
+        function normalizeKey(k) {
+          return String(k).normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim();
+        }
+        const detectedKeys = Object.keys(rawJson[0]);
+        const headerMap = {};
+        for (const [canonKey, colName] of Object.entries(COL)) {
+          const normTarget = normalizeKey(colName);
+          const found = detectedKeys.find(k => normalizeKey(k) === normTarget);
+          if (found) headerMap[colName] = found;
+          else headerMap[colName] = colName; // fallback : nom attendu tel quel
+        }
+        // Réindexer les lignes avec les vrais noms de colonnes détectés
+        const raw = rawJson.map(r => {
+          const out = {};
+          for (const [colName, detectedName] of Object.entries(headerMap)) {
+            out[colName] = r[detectedName] ?? null;
+          }
+          return out;
+        });
+
+        let supprimees = 0;
+        let couts_corriges = 0;
+
+        const rows = raw.map(r => {
+          const out = {};
+          for (const [key, col] of Object.entries(COL)) {
+            let v = r[col] ?? null;
+            if (['nb_jours','nb_heures','nb_etp','pv_jour','total_ht','valorisation',
+                 'cout_jour','tj_theorique','reste_a_produire'].includes(key)) {
+              v = v !== null ? parseFloat(v) || 0 : 0;
+            }
+            out[key] = v;
+          }
+          out.cout_total = (out.cout_jour || 0) * (out.nb_jours || 0);
+          out.marge_brute = (out.total_ht || 0) - out.cout_total;
+          return out;
+        })
+        .filter(r => {
+          if (!r.mois_annee) return false;
+          // Règle 1 : supprimer lignes CNEXT interne (si case cochée)
+          if (document.getElementById('rule-cnext').checked) {
+            const clientUp = (r.client || '').toUpperCase().trim();
+            if (clientUp === 'CNEXT CONSULTING' || clientUp === 'CNEXT_INTERNE') {
+              supprimees++;
+              return false;
+            }
+          }
+          return true;
+        })
+        .map(r => {
+          // Règle 2 : corriger Coût/j si Société intervenante = CNEXT GREENTECH (si case cochée)
+          const soc = (r.societe_intervenante || '').toUpperCase().trim();
+          if ((soc.includes('GREENTECH') || soc.includes('GREEN TECH')) && document.getElementById('rule-greentech').checked) {
+            const coutCorrige = greentechMap[r.collaborateur];
+            if (coutCorrige != null) {
+              r.cout_jour = coutCorrige;
+              r._cout_corrige = true;
+              couts_corriges++;
+            } else {
+              r._cout_manquant = true;
+            }
+            r.cout_total = r.cout_jour * (r.nb_jours || 0);
+            r.marge_brute = (r.total_ht || 0) - r.cout_total;
+          }
+          return r;
+        });
+
+        const manquants = rows.filter(r => r._cout_manquant).map(r => r.collaborateur);
+        const uniqManquants = [...new Set(manquants)];
+
+        resolve({ rows, supprimees, couts_corriges, manquants: uniqManquants });
+      } catch(err) { reject(err.message); }
+    };
+    reader.onerror = () => reject('Erreur lecture fichier');
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+// ─── PARSE GREENTECH CORRECTION FILE ─────────────────────────
+function parseGreentechFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const wb = XLSX.read(e.target.result, { type: 'array' });
+        // Chercher la feuille GreenTech ou prendre la première
+        const sheetName = wb.SheetNames.find(n => n.toUpperCase().includes('GREEN')) || wb.SheetNames[0];
+        const ws = wb.Sheets[sheetName];
+
+        // Lire en tableau brut (header: 1) pour accéder aux colonnes par position
+        // ET en JSON pour accéder par nom — on essaie les deux
+        const rawJson = XLSX.utils.sheet_to_json(ws, { defval: null });
+        if (!rawJson.length) return reject('Fichier vide');
+
+        // Détecter la colonne coût : chercher par nom (variantes) ou prendre la 4e colonne
+        const firstRow = rawJson[0];
+        const keys = Object.keys(firstRow);
+
+        // Cherche la clé qui ressemble à Coût/j (insensible à l'encodage)
+        const coutKey = keys.find(k => {
+          const norm = k.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+          return norm.includes('cout') || norm.includes('co') && norm.includes('t') && norm.includes('j');
+        }) || keys[3]; // fallback : 4e colonne
+
+        // Cherche la clé Collaborateur
+        const collabKey = keys.find(k => k.toLowerCase().includes('collabor')) || keys[0];
+        const clientKey = keys.find(k => k.toLowerCase() === 'client') || keys[1];
+        const clientFinalKey = keys.find(k => k.toLowerCase().includes('final')) || keys[2];
+
+        const corrections = rawJson.map(r => ({
+          collaborateur: String(r[collabKey] || '').trim(),
+          client:        String(r[clientKey] || '').trim(),
+          client_final:  String(r[clientFinalKey] || '').trim(),
+          cout_jour:     parseFloat(r[coutKey]) || 0
+        })).filter(r => r.collaborateur && r.collaborateur !== 'Collaborateur');
+
+        if (!corrections.length) {
+          return reject(`Aucune ligne lue. Colonnes détectées : ${keys.join(', ')}`);
+        }
+
+        resolve(corrections);
+      } catch(err) { reject(err.message); }
+    };
+    reader.onerror = () => reject('Erreur lecture fichier');
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+// ─── PREVIEW ─────────────────────────────────────────────────
+function showPreview(rows, filename, supprimees=0, couts_corriges=0) {
+  if (!rows.length) { showToast('Aucune ligne valide trouvée', 'error'); return; }
+
+  const moisSet = [...new Set(rows.map(r => r.mois_annee).filter(Boolean))];
+  pendingRows = rows;
+  pendingMois = moisSet;
+  pendingFilename = filename;
+
+  const totalCA = rows.reduce((s,r) => s + (r.total_ht||0), 0);
+  const totalCout = rows.reduce((s,r) => s + (r.cout_total||0), 0);
+  const totalJours = rows.reduce((s,r) => s + (r.nb_jours||0), 0);
+  const marge = totalCA - totalCout;
+  const taux = totalCA > 0 ? (marge/totalCA*100) : 0;
+
+  document.getElementById('prev-filename').textContent = filename;
+  document.getElementById('prev-mois').textContent = moisSet.map(formatMois).join(', ');
+  document.getElementById('prev-lignes').textContent = `${rows.length} lignes conservées`;
+  const statusEl = document.getElementById('prev-status');
+  const parts = [];
+  if (supprimees > 0)     parts.push(`${supprimees} lignes CNEXT supprimées`);
+  if (couts_corriges > 0) parts.push(`${couts_corriges} coûts GreenTech corrigés`);
+  if (parts.length) {
+    statusEl.textContent = parts.join(' · ');
+    statusEl.style.display = 'inline';
+    statusEl.className = 'chip chip-warn';
+  } else {
+    statusEl.style.display = 'none';
+  }
+
+  document.getElementById('prev-kpis').innerHTML = `
+    <div class="kpi"><div class="kpi-label">CA total</div><div class="kpi-val green">${fmtEur(totalCA)}</div></div>
+    <div class="kpi"><div class="kpi-label">Coûts estimés</div><div class="kpi-val">${fmtEur(totalCout)}</div></div>
+    <div class="kpi"><div class="kpi-label">Marge brute</div><div class="kpi-val blue">${fmtEur(marge)}</div></div>
+    <div class="kpi"><div class="kpi-label">Taux de marge</div><div class="kpi-val warn">${fmtNum(taux)}%</div></div>
+  `;
+
+  const cols = ['Mois','Entité','Collaborateur','Client','Client final','Affaire','Jours','CA HT','Coût','Marge'];
+  document.getElementById('prev-thead').innerHTML = `<tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr>`;
+  document.getElementById('prev-tbody').innerHTML = rows.slice(0,20).map(r => `
+    <tr>
+      <td>${formatMois(r.mois_annee)}</td>
+      <td style="color:var(--muted)">${r.entite_collab||'—'}</td>
+      <td>${r.collaborateur||'—'}</td>
+      <td>${r.client||'—'}</td>
+      <td>${r.client_final||'—'}</td>
+      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis">${r.objet_affaire||'—'}</td>
+      <td style="text-align:right">${fmtNum(r.nb_jours,1)}</td>
+      <td style="text-align:right">${fmtEur(r.total_ht)}</td>
+      <td style="text-align:right">${fmtEur(r.cout_total)}</td>
+      <td style="text-align:right;color:${r.marge_brute>=0?'#f97316':'#ef4444'}">${fmtEur(r.marge_brute)}</td>
+    </tr>
+  `).join('') + (rows.length > 20 ? `<tr><td colspan="10" style="color:var(--muted);text-align:center;padding:10px">… ${rows.length-20} lignes supplémentaires</td></tr>` : '');
+
+  document.getElementById('preview-section').style.display = 'block';
+  document.getElementById('preview-section').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+// ─── IMPORT ──────────────────────────────────────────────────
+async function doImport(force = false) {
+  if (!pendingRows.length) return;
+  const mode = document.getElementById('mode-fusion').checked ? 'fusion' : 'remplacement';
+
+  showLoading('Import en cours...');
+  try {
+    let nbAjoutes = 0, nbMisAjour = 0, nbRemplaces = 0;
+
+    if (mode === 'remplacement') {
+      for (const mois of pendingMois) {
+        const entites = [...new Set(pendingRows.filter(r=>String(r.mois_annee)===String(mois)).map(r=>r.entite_collab).filter(Boolean))];
+        for (const entite of entites) {
+          const existing = await db.productions.where('mois_annee').equals(mois).filter(r=>r.entite_collab===entite).count();
+          if (existing > 0 && !force) {
+            hideLoading();
+            document.getElementById('modal-body').textContent =
+              `Données existantes pour ${formatMois(mois)} — ${entite} (${existing} lignes). Remplacer ?`;
+            document.getElementById('modal-replace').classList.add('open');
+            return;
+          }
+          const ids = await db.productions.where('mois_annee').equals(mois).filter(r=>r.entite_collab===entite).primaryKeys();
+          await db.productions.bulkDelete(ids);
+          nbRemplaces += ids.length;
+        }
+      }
+      const importId = await db.imports_log.add({
+        mois_annee: pendingMois.join(','), filename: pendingFilename, mode: 'remplacement',
+        lignes: pendingRows.length,
+        ca_total: pendingRows.reduce((s,r)=>s+(r.total_ht||0),0),
+        cout_total: pendingRows.reduce((s,r)=>s+(r.cout_total||0),0),
+        entites: [...new Set(pendingRows.map(r=>r.entite_collab).filter(Boolean))].join(', '),
+        imported_at: new Date().toISOString()
+      });
+      await db.productions.bulkAdd(pendingRows.map(r=>({...r, import_id: importId})));
+      nbAjoutes = pendingRows.length;
+
+    } else {
+      // Fusion : upsert sur mois + ref_affaire + collaborateur
+      const importId = await db.imports_log.add({
+        mois_annee: pendingMois.join(','), filename: pendingFilename, mode: 'fusion',
+        lignes: pendingRows.length,
+        ca_total: pendingRows.reduce((s,r)=>s+(r.total_ht||0),0),
+        cout_total: pendingRows.reduce((s,r)=>s+(r.cout_total||0),0),
+        entites: [...new Set(pendingRows.map(r=>r.entite_collab).filter(Boolean))].join(', '),
+        imported_at: new Date().toISOString()
+      });
+      for (const row of pendingRows) {
+        const existing = await db.productions
+          .where('mois_annee').equals(row.mois_annee)
+          .filter(r => r.ref_affaire === row.ref_affaire && r.collaborateur === row.collaborateur)
+          .first();
+        if (existing) {
+          await db.productions.put({ ...existing, ...row, id: existing.id, import_id: importId });
+          nbMisAjour++;
+        } else {
+          await db.productions.add({ ...row, import_id: importId });
+          nbAjoutes++;
+        }
+      }
+    }
+
+    pendingRows = [];
+    pendingMois = null;
+    document.getElementById('preview-section').style.display = 'none';
+    document.getElementById('fileInput').value = '';
+
+    const msg = mode === 'remplacement'
+      ? `✓ Remplacement : ${nbAjoutes} lignes importées (${nbRemplaces} supprimées)`
+      : `✓ Fusion : ${nbAjoutes} ajoutées · ${nbMisAjour} mises à jour`;
+    showToast(msg, 'success');
+    await refreshHistory();
+    await refreshExportCount();
+  } catch(err) {
+    showToast('Erreur : ' + err.message, 'error');
+  }
+  hideLoading();
+}
+
+
+// ─── HISTORY ─────────────────────────────────────────────────
+async function refreshHistory() {
+  const logs = await db.imports_log.orderBy('mois_annee').reverse().toArray();
+  const container = document.getElementById('history-list');
+
+  if (!logs.length) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <strong>Aucune donnée importée</strong>
+        <p>Importez votre premier fichier mensuel ci-dessus.</p>
+      </div>`;
+    return;
+  }
+
+  container.innerHTML = logs.map(log => {
+    const moisList = log.mois_annee.split(',');
+    const marge = (log.ca_total||0) - (log.cout_total||0);
+    const taux = log.ca_total > 0 ? (marge/log.ca_total*100) : 0;
+    const date = new Date(log.imported_at).toLocaleDateString('fr-FR', {day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    return `
+    <div class="history-item">
+      <div class="history-left">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="history-month">${moisList.map(formatMois).join(' · ')}</div>
+          ${log.mode === 'fusion'
+            ? '<span style="font-size:10px;font-family:var(--mono);background:rgba(30,80,160,0.10);color:#1e50a0;padding:2px 8px;border-radius:20px;border:1px solid rgba(30,80,160,0.2)">FUSION</span>'
+            : log.mode === 'remplacement'
+            ? '<span style="font-size:10px;font-family:var(--mono);background:rgba(249,115,22,0.10);color:#c2410c;padding:2px 8px;border-radius:20px;border:1px solid rgba(249,115,22,0.25)">REMPLACEMENT</span>'
+            : ''}
+        </div>
+        <div class="history-stats">
+          <span class="stat"><strong>${log.lignes}</strong> lignes</span>
+          ${log.entites ? `<span class="stat">Entités <strong>${log.entites}</strong></span>` : ''}
+          <span class="stat">CA <strong>${fmtEur(log.ca_total)}</strong></span>
+          <span class="stat">Coûts <strong>${fmtEur(log.cout_total)}</strong></span>
+          <span class="stat">Marge <strong style="color:#f97316">${fmtEur(marge)}</strong> (${fmtNum(taux)}%)</span>
+        </div>
+      </div>
+      <div class="history-right">
+        <span class="history-date">${date}</span>
+        <button class="btn btn-danger" style="padding:5px 12px;font-size:12px" onclick="confirmDelete(${log.id},'${log.mois_annee}')">Supprimer</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function confirmDelete(id, mois) {
+  deleteTargetMois = { id, mois };
+  const moisList = mois.split(',').map(formatMois).join(', ');
+  document.getElementById('modal-delete-body').textContent =
+    `Supprimer toutes les données pour ${moisList} ? Cette action est irréversible.`;
+  document.getElementById('modal-delete').classList.add('open');
+}
+
+async function doDelete() {
+  if (!deleteTargetMois) return;
+  showLoading('Suppression...');
+  const moisList = deleteTargetMois.mois.split(',');
+  for (const m of moisList) {
+    await db.productions.where('mois_annee').equals(m).delete();
+  }
+  await db.imports_log.delete(deleteTargetMois.id);
+  deleteTargetMois = null;
+  hideLoading();
+  showToast('Données supprimées', 'warn');
+  await refreshHistory();
+  await refreshExportCount();
+}
+
+// ─── EVENTS ──────────────────────────────────────────────────
+const dz = document.getElementById('dropzone');
+const fi = document.getElementById('fileInput');
+
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+dz.addEventListener('drop', async e => {
+  e.preventDefault();
+  dz.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file) await handleFile(file);
+});
+
+fi.addEventListener('change', async e => {
+  if (e.target.files[0]) await handleFile(e.target.files[0]);
+});
+
+async function handleFile(file) {
+  showLoading('Lecture du fichier...');
+  try {
+    const { rows, supprimees, couts_corriges, manquants } = await parseFile(file);
+    hideLoading();
+
+    // Avertissement si des collaborateurs GreenTech n'ont pas de correction
+    if (manquants.length) {
+      showToast('⚠ Coût non trouvé pour : ' + manquants.join(', ') + ' — coût source conservé', 'warn');
+    }
+
+    showPreview(rows, file.name, supprimees, couts_corriges);
+  } catch(err) {
+    hideLoading();
+    showToast('Erreur : ' + err, 'error');
+  }
+}
+
+// ─── GREENTECH CORRECTION ────────────────────────────────────
+async function loadGreentechFromDB() {
+  const rows = await db.greentech_corrections.toArray();
+  if (rows.length) {
+    greentechMap = {};
+    rows.forEach(r => { greentechMap[r.collaborateur] = r.cout_jour; });
+    updateGreentechUI(rows.length);
+  }
+}
+
+function updateGreentechUI(count) {
+  document.getElementById('greentech-status').textContent = `✓ ${count} collaborateurs chargés`;
+  document.getElementById('greentech-status').style.color = '#1e50a0';
+  const badge = document.getElementById('greentech-badge');
+  badge.textContent = `${count} collaborateurs`;
+  badge.style.display = 'block';
+  document.getElementById('greentech-zone').style.borderColor = 'rgba(30,80,160,0.3)';
+  document.getElementById('greentech-zone').style.background = 'rgba(30,80,160,0.04)';
+}
+
+// ─── NETTOYAGE AUTOMATIQUE ───────────────────────────────────
+async function appliquerNettoyageAuto(source='import') {
+  const all = await db.productions.toArray();
+  let supprimees = 0, corriges = 0;
+
+  // Supprimer lignes CNEXT interne
+  const cnextIds = all
+    .filter(r => { const c=(r.client||'').toUpperCase().trim(); return c==='CNEXT CONSULTING'||c==='CNEXT_INTERNE'; })
+    .map(r => r.id);
+  if (cnextIds.length) {
+    await db.productions.bulkDelete(cnextIds);
+    supprimees = cnextIds.length;
+  }
+
+  // Corriger coûts GreenTech
+  for (const r of all) {
+    if (cnextIds.includes(r.id)) continue;
+    if (!(r.societe_intervenante||'').toUpperCase().includes('GREENTECH')) continue;
+    const cj = greentechMap[r.collaborateur];
+    if (cj == null || Math.abs(cj - (r.cout_jour||0)) < 0.01) continue;
+    const cout_total  = cj * (r.nb_jours||0);
+    const marge_brute = (r.total_ht||0) - cout_total;
+    await db.productions.update(r.id, { cout_jour: cj, cout_total, marge_brute });
+    corriges++;
+  }
+
+  if (supprimees > 0 || corriges > 0) {
+    await db.corrections_log.add({
+      filename: source,
+      applied_at: new Date().toISOString(),
+      nb_updates: corriges,
+      nb_new: 0,
+      nb_supprimees: supprimees,
+      summary: `${supprimees} lignes supprimées (CNEXT interne) · ${corriges} coûts GreenTech corrigés`
+    });
+  }
+  return { supprimees, corriges };
+}
+
+document.getElementById('greentechInput').addEventListener('change', async e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  showLoading('Chargement du référentiel GreenTech...');
+  try {
+    const corrections = await parseGreentechFile(file);
+    // Persister en DB
+    await db.greentech_corrections.clear();
+    await db.greentech_corrections.bulkAdd(corrections);
+    // Mettre à jour la map en mémoire
+    greentechMap = {};
+    corrections.forEach(r => { greentechMap[r.collaborateur] = r.cout_jour; });
+    updateGreentechUI(corrections.length);
+    document.getElementById('greentech-filename').textContent = file.name;
+
+    // Vérifier s'il y a des données en base à recalculer
+    const totalBase = await db.productions.count();
+    if (totalBase > 0) {
+      showLoading('Recalcul des coûts GreenTech sur toute la base...');
+      const { supprimees, corriges } = await appliquerNettoyageAuto(`Mise à jour référentiel GreenTech — ${file.name}`);
+      showToast(
+        corriges > 0 || supprimees > 0
+          ? `✓ Référentiel chargé · ${corriges} coûts recalculés · ${supprimees} lignes supprimées`
+          : `✓ Référentiel chargé — aucune ligne impactée en base`,
+        'success'
+      );
+      await refreshCorrHistory();
+    } else {
+      showToast(`✓ ${corrections.length} collaborateurs GreenTech chargés`, 'success');
+    }
+  } catch(err) {
+    showToast('Erreur : ' + err, 'error');
+  }
+  hideLoading();
+});
+
+document.getElementById('btn-import').addEventListener('click', () => doImport(false));
+document.getElementById('btn-cancel').addEventListener('click', () => {
+  document.getElementById('preview-section').style.display = 'none';
+  document.getElementById('fileInput').value = '';
+  pendingRows = [];
+});
+
+document.getElementById('modal-cancel').addEventListener('click', () => {
+  document.getElementById('modal-replace').classList.remove('open');
+});
+document.getElementById('modal-confirm').addEventListener('click', () => {
+  document.getElementById('modal-replace').classList.remove('open');
+  doImport(true);
+});
+
+document.getElementById('modal-delete-cancel').addEventListener('click', () => {
+  document.getElementById('modal-delete').classList.remove('open');
+});
+document.getElementById('modal-delete-confirm').addEventListener('click', () => {
+  document.getElementById('modal-delete').classList.remove('open');
+  doDelete();
+});
+
+// ─── ADMIN TABS ──────────────────────────────────────────────
+document.querySelectorAll('.tab-admin').forEach(t => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.tab-admin').forEach(x => x.classList.remove('active'));
+    document.querySelectorAll('.tab-admin-content').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    const id = 'atab-' + t.dataset.atab;
+    document.getElementById(id).classList.add('active');
+    if (t.dataset.atab === 'corrections') refreshCorrHistory();
+    if (t.dataset.atab === 'referentiels') refreshGreentechTable();
+  });
+});
+
+// ─── CORRECTION FILE IMPORT ───────────────────────────────────
+let pendingCorrRows = [];
+let pendingCorrDiff = [];
+
+const corrDz = document.getElementById('corr-dropzone');
+const corrFi = document.getElementById('corrFileInput');
+
+corrDz.addEventListener('dragover', e => { e.preventDefault(); corrDz.classList.add('dragover'); });
+corrDz.addEventListener('dragleave', () => corrDz.classList.remove('dragover'));
+corrDz.addEventListener('drop', async e => {
+  e.preventDefault(); corrDz.classList.remove('dragover');
+  if (e.dataTransfer.files[0]) await handleCorrFile(e.dataTransfer.files[0]);
+});
+corrFi.addEventListener('change', async e => {
+  if (e.target.files[0]) await handleCorrFile(e.target.files[0]);
+});
+
+async function handleCorrFile(file) {
+  showLoading('Lecture du fichier de correction...');
+  try {
+    // Auto-détecter le type de fichier selon le nombre de colonnes
+    const colCount = await detectColumnCount(file);
+
+    if (colCount <= 6) {
+      // Format 4 colonnes = référentiel GreenTech → traiter comme tel
+      const corrections = await parseGreentechFile(file);
+      await db.greentech_corrections.clear();
+      await db.greentech_corrections.bulkAdd(corrections);
+      greentechMap = {};
+      corrections.forEach(r => { greentechMap[r.collaborateur] = r.cout_jour; });
+      updateGreentechUI(corrections.length);
+      document.getElementById('greentech-filename').textContent = file.name;
+      hideLoading();
+      showToast(`✓ Référentiel GreenTech chargé — ${corrections.length} collaborateurs`, 'success');
+      // Basculer sur l'onglet référentiels pour confirmer visuellement
+      document.querySelectorAll('.tab-admin').forEach(x => x.classList.remove('active'));
+      document.querySelectorAll('.tab-admin-content').forEach(x => x.classList.remove('active'));
+      document.querySelector('[data-atab="referentiels"]').classList.add('active');
+      document.getElementById('atab-referentiels').classList.add('active');
+      await refreshGreentechTable();
+    } else {
+      // Format production = fichier de correction ligne à ligne
+      const { rows } = await parseFile(file);
+      if (!rows.length) { showToast('Aucune ligne valide', 'error'); hideLoading(); return; }
+      const diff = await buildCorrDiff(rows);
+      pendingCorrRows = rows;
+      pendingCorrDiff = diff;
+      hideLoading();
+      showCorrPreview(file.name, diff);
+    }
+  } catch(err) {
+    hideLoading();
+    showToast('Erreur : ' + err, 'error');
+  }
+}
+
+// Détecte le nombre de colonnes d'un fichier sans le parser entièrement
+function detectColumnCount(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const wb = XLSX.read(e.target.result, { type: 'array' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const firstRow = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null })[0] || [];
+        resolve(firstRow.filter(v => v != null).length);
+      } catch(err) { reject(err.message); }
+    };
+    reader.onerror = () => reject('Erreur lecture');
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+async function buildCorrDiff(corrRows) {
+  const diff = [];
+  for (const cr of corrRows) {
+    // Jointure : mois_annee + ref_affaire + collaborateur
+    const existing = await db.productions
+      .where('mois_annee').equals(cr.mois_annee)
+      .filter(r => r.ref_affaire === cr.ref_affaire && r.collaborateur === cr.collaborateur)
+      .toArray();
+
+    if (!existing.length) {
+      diff.push({ type: 'new', row: cr });
+    } else {
+      existing.forEach(ex => {
+        const changes = [];
+        const fields = [
+          { key: 'total_ht',    label: 'Total HT',  fmt: fmtEur },
+          { key: 'cout_jour',   label: 'Coût/j',    fmt: fmtEur },
+          { key: 'nb_jours',    label: 'Nb jours',  fmt: v => fmtNum(v,1) },
+          { key: 'pv_jour',     label: 'PV/j',      fmt: fmtEur },
+          { key: 'client',      label: 'Client',    fmt: v => v },
+          { key: 'client_final',label: 'Client final', fmt: v => v },
+        ];
+        fields.forEach(f => {
+          const oldVal = ex[f.key];
+          const newVal = cr[f.key];
+          if (newVal != null && String(oldVal) !== String(newVal)) {
+            changes.push({ field: f.label, old: f.fmt(oldVal), new: f.fmt(newVal) });
+          }
+        });
+        // Recalcul marge
+        const newCout = (cr.cout_jour ?? ex.cout_jour) * (cr.nb_jours ?? ex.nb_jours);
+        const newMarge = (cr.total_ht ?? ex.total_ht) - newCout;
+        const oldMarge = ex.marge_brute;
+        if (Math.abs(newMarge - oldMarge) > 0.01) {
+          changes.push({ field: 'Marge brute', old: fmtEur(oldMarge), new: fmtEur(newMarge) });
+        }
+        if (changes.length) {
+          diff.push({ type: 'update', dbId: ex.id, row: cr, existing: ex, changes });
+        } else {
+          diff.push({ type: 'nochange', row: cr, existing: ex });
+        }
+      });
+    }
+  }
+  return diff;
+}
+
+function showCorrPreview(filename, diff) {
+  const updates   = diff.filter(d => d.type === 'update');
+  const news      = diff.filter(d => d.type === 'new');
+  const nochanges = diff.filter(d => d.type === 'nochange');
+
+  document.getElementById('corr-prev-filename').textContent = filename;
+  document.getElementById('corr-prev-matches').textContent  = `${updates.length} modifications`;
+  document.getElementById('corr-prev-new').textContent      = `${news.length} nouvelles lignes`;
+  document.getElementById('corr-prev-nochange').textContent = `${nochanges.length} sans changement`;
+
+  // KPIs impact
+  let oldCA = 0, newCA = 0, oldMarge = 0, newMarge = 0;
+  updates.forEach(d => {
+    oldCA    += d.existing.total_ht   || 0;
+    newCA    += d.row.total_ht        || d.existing.total_ht || 0;
+    oldMarge += d.existing.marge_brute|| 0;
+    const nc = (d.row.cout_jour ?? d.existing.cout_jour) * (d.row.nb_jours ?? d.existing.nb_jours);
+    newMarge += (d.row.total_ht ?? d.existing.total_ht) - nc;
+  });
+  document.getElementById('corr-prev-kpis').innerHTML = updates.length ? `
+    <div class="kpi"><div class="kpi-label">CA impacté</div><div class="kpi-val blue">${fmtEur(oldCA)} → <span style="color:#f97316">${fmtEur(newCA)}</span></div></div>
+    <div class="kpi"><div class="kpi-label">Marge impactée</div><div class="kpi-val amber">${fmtEur(oldMarge)} → <span style="color:#f97316">${fmtEur(newMarge)}</span></div></div>
+    <div class="kpi"><div class="kpi-label">Delta marge</div><div class="kpi-val ${newMarge-oldMarge>=0?'green':'coral'}">${newMarge-oldMarge>=0?'+':''}${fmtEur(newMarge-oldMarge)}</div></div>
+    <div class="kpi"><div class="kpi-label">Lignes modifiées</div><div class="kpi-val warn">${updates.length}</div></div>
+  ` : '<div style="padding:14px 18px;font-size:12px;color:var(--muted)">Aucune modification détectée</div>';
+
+  // Diff table
+  const thead = document.querySelector('#corr-diff-table thead');
+  const tbody = document.querySelector('#corr-diff-table tbody');
+  thead.innerHTML = '<tr><th>Type</th><th>Mois</th><th>Collaborateur</th><th>Réf. affaire</th><th>Client</th><th>Modifications</th></tr>';
+  const shown = [...updates, ...news].slice(0, 50);
+  tbody.innerHTML = shown.map(d => {
+    const typeChip = d.type === 'update'
+      ? `<span class="chip chip-warn" style="padding:2px 7px;font-size:10px">MAJ</span>`
+      : `<span class="chip chip-green" style="padding:2px 7px;font-size:10px">NOUVEAU</span>`;
+    const changesHtml = d.changes ? d.changes.map(c =>
+      `<div style="white-space:nowrap">${c.field}: <span class="diff-old">${c.old}</span><span class="diff-arrow">→</span><span class="diff-new">${c.new}</span></div>`
+    ).join('') : '—';
+    return `<tr>
+      <td>${typeChip}</td>
+      <td>${formatMois(d.row.mois_annee)}</td>
+      <td>${d.row.collaborateur||'—'}</td>
+      <td style="font-family:var(--mono);font-size:10px">${d.row.ref_affaire||'—'}</td>
+      <td>${d.row.client||'—'}</td>
+      <td>${changesHtml}</td>
+    </tr>`;
+  }).join('') + (shown.length < diff.filter(d=>d.type!=='nochange').length ?
+    `<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:10px;font-size:11px">… et ${diff.filter(d=>d.type!=='nochange').length - shown.length} autres</td></tr>` : '');
+
+  document.getElementById('btn-apply-corr').disabled = updates.length === 0 && news.length === 0;
+  document.getElementById('corr-preview-section').style.display = 'block';
+  document.getElementById('corr-preview-section').scrollIntoView({ behavior:'smooth', block:'nearest' });
+}
+
+async function applyCorrections() {
+  if (!pendingCorrDiff.length) return;
+  showLoading('Application des corrections...');
+  let applied = 0, added = 0;
+  try {
+    for (const d of pendingCorrDiff) {
+      if (d.type === 'update') {
+        const nc = (d.row.cout_jour ?? d.existing.cout_jour) * (d.row.nb_jours ?? d.existing.nb_jours);
+        const updated = {
+          ...d.existing,
+          ...Object.fromEntries(Object.entries(d.row).filter(([,v]) => v != null)),
+          cout_total:  nc,
+          marge_brute: (d.row.total_ht ?? d.existing.total_ht) - nc
+        };
+        await db.productions.put(updated);
+        applied++;
+      } else if (d.type === 'new') {
+        await db.productions.add(d.row);
+        added++;
+      }
+    }
+    // Log
+    await db.corrections_log.add({
+      filename: document.getElementById('corr-prev-filename').textContent,
+      applied_at: new Date().toISOString(),
+      nb_updates: applied,
+      nb_new: added,
+      summary: `${applied} lignes mises à jour, ${added} ajoutées`
+    });
+    pendingCorrRows = [];
+    pendingCorrDiff = [];
+    document.getElementById('corr-preview-section').style.display = 'none';
+    corrFi.value = '';
+    showToast(`✓ ${applied} mises à jour · ${added} ajouts`, 'success');
+    await refreshCorrHistory();
+  } catch(err) {
+    showToast('Erreur : ' + err.message, 'error');
+  }
+  hideLoading();
+}
+
+document.getElementById('btn-apply-corr').addEventListener('click', applyCorrections);
+document.getElementById('btn-cancel-corr').addEventListener('click', () => {
+  document.getElementById('corr-preview-section').style.display = 'none';
+  corrFi.value = '';
+  pendingCorrRows = [];
+  pendingCorrDiff = [];
+});
+
+// ─── NETTOYAGE MANUEL ────────────────────────────────────────
+document.getElementById('btn-analyse-nettoyage').addEventListener('click', async () => {
+  showLoading('Analyse de la base...');
+  const all = await db.productions.toArray();
+  const greentech = all.filter(r => (r.societe_intervenante||'').toUpperCase().includes('GREENTECH'));
+  document.getElementById('net-total-lignes').textContent    = all.length.toLocaleString('fr-FR');
+  document.getElementById('net-greentech-lignes').textContent = greentech.length;
+  document.getElementById('btn-appliquer-nettoyage').disabled = false;
+  hideLoading();
+  document.getElementById('nettoyage-result').style.display = 'none';
+});
+
+document.getElementById('btn-appliquer-nettoyage').addEventListener('click', async () => {
+  showLoading('Recalcul en cours...');
+  const { supprimees, corriges } = await appliquerNettoyageAuto('Recalcul manuel');
+  hideLoading();
+  const res = document.getElementById('nettoyage-result');
+  res.style.display = 'inline';
+  res.style.color = 'var(--accent)';
+  res.textContent = `✓ ${supprimees} supprimées · ${corriges} coûts corrigés`;
+  document.getElementById('btn-appliquer-nettoyage').disabled = true;
+  const all = await db.productions.toArray();
+  document.getElementById('net-total-lignes').textContent = all.length.toLocaleString('fr-FR');
+  showToast(`✓ Recalcul terminé — ${supprimees} supprimées · ${corriges} corrigées`, 'success');
+  await refreshCorrHistory();
+});
+
+// ─── CORRECTION HISTORY ──────────────────────────────────────
+async function refreshCorrHistory() {
+  const logs = await db.corrections_log.orderBy('applied_at').reverse().toArray();
+  const container = document.getElementById('corr-history-list');
+  if (!logs.length) {
+    container.innerHTML = `<div class="empty-state"><strong>Aucune correction appliquée</strong><p>L'historique des opérations apparaîtra ici.</p></div>`;
+    return;
+  }
+  container.innerHTML = logs.map(log => {
+    const d = new Date(log.applied_at);
+    const date = d.toLocaleDateString('fr-FR', {day:'2-digit',month:'short',year:'numeric'})
+               + ' ' + d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+    return `<div class="corr-log-item">
+      <div>
+        <div class="corr-log-detail"><strong>${log.filename}</strong></div>
+        <div class="corr-log-detail" style="margin-top:3px;color:var(--muted)">${log.summary}</div>
+      </div>
+      <div class="corr-log-date">${date}</div>
+    </div>`;
+  }).join('');
+}
+
+// ─── GREENTECH TABLE ─────────────────────────────────────────
+async function refreshGreentechTable() {
+  const rows = await db.greentech_corrections.toArray();
+  const wrap = document.getElementById('greentech-table-wrap');
+  if (!rows.length) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+  document.getElementById('greentech-thead').innerHTML =
+    '<tr><th>Collaborateur</th><th>Client</th><th>Client final</th><th style="text-align:right">Coût/j</th></tr>';
+  document.getElementById('greentech-tbody').innerHTML = rows.map(r => `
+    <tr>
+      <td>${r.collaborateur}</td>
+      <td>${r.client||'—'}</td>
+      <td>${r.client_final||'—'}</td>
+      <td style="text-align:right;font-family:var(--mono);font-size:11px;color:#f97316">${fmtEur(r.cout_jour)}</td>
+    </tr>`).join('');
+}
+
+// ─── INIT ────────────────────────────────────────────────────
+// ─── EXPORT ──────────────────────────────────────────────────
+async function refreshExportCount() {
+  const n = await db.productions.count();
+  const el = document.getElementById('export-count');
+  if (el) el.textContent = n > 0 ? `${n.toLocaleString('fr-FR')} lignes en base` : '';
+}
+
+async function exportToExcel() {
+  showLoading('Génération du fichier Excel...');
+  try {
+    const rows = await db.productions.orderBy('mois_annee').toArray();
+    if (!rows.length) { hideLoading(); showToast('Aucune donnée à exporter', 'warn'); return; }
+
+    const COLS = [
+      { key:'mois_annee',           label:'Mois/Année' },
+      { key:'entite_collab',        label:'Entité' },
+      { key:'collaborateur',        label:'Collaborateur' },
+      { key:'nom',                  label:'Nom' },
+      { key:'prenom',               label:'Prénom' },
+      { key:'client',               label:'Client' },
+      { key:'client_final',         label:'Client final' },
+      { key:'ref_affaire',          label:'Réf. affaire' },
+      { key:'objet_affaire',        label:"Objet de l'affaire" },
+      { key:'regie_forfait',        label:'Régie/Forfait' },
+      { key:'interne_externe',      label:'Interne/Externe' },
+      { key:'societe_intervenante', label:'Société intervenante' },
+      { key:'nb_jours',             label:'Nb de jours' },
+      { key:'pv_jour',              label:'PV/j' },
+      { key:'total_ht',             label:'Total HT' },
+      { key:'cout_jour',            label:'Coût/j' },
+      { key:'cout_total',           label:'Coût total' },
+      { key:'marge_brute',          label:'Marge brute' },
+      { key:'_taux',  label:'Taux marge %', compute: r => r.total_ht>0 ? Math.round(r.marge_brute/r.total_ht*1000)/10 : 0 },
+      { key:'_tjm',   label:'TJM',          compute: r => r.nb_jours>0  ? Math.round(r.total_ht/r.nb_jours)            : 0 },
+    ];
+
+    const wb  = XLSX.utils.book_new();
+    const ws  = XLSX.utils.aoa_to_sheet([
+      COLS.map(c => c.label),
+      ...rows.map(r => COLS.map(c => c.compute ? c.compute(r) : (r[c.key] ?? '')))
+    ]);
+    ws['!cols'] = COLS.map((_,i) => ({ wch: i<2?14 : i<8?22 : 14 }));
+    XLSX.utils.book_append_sheet(wb, ws, 'Productions');
+
+    // Feuille résumé
+    const summary = {};
+    rows.forEach(r => {
+      const k = `${r.mois_annee}||${r.entite_collab||''}`;
+      if (!summary[k]) summary[k] = { mois:r.mois_annee, entite:r.entite_collab||'', ca:0, cout:0, jours:0, nb:0 };
+      summary[k].ca    += r.total_ht    || 0;
+      summary[k].cout  += r.cout_total  || 0;
+      summary[k].jours += r.nb_jours    || 0;
+      summary[k].nb    += 1;
+    });
+    const wsSum = XLSX.utils.aoa_to_sheet([
+      ['Mois/Année','Entité','CA HT','Coûts','Marge brute','Taux marge %','Jours','Nb lignes'],
+      ...Object.values(summary).sort((a,b)=>String(a.mois).localeCompare(String(b.mois))).map(s => {
+        const m = s.ca - s.cout;
+        return [s.mois, s.entite, s.ca, s.cout, m, s.ca>0?Math.round(m/s.ca*1000)/10:0, s.jours, s.nb];
+      })
+    ]);
+    wsSum['!cols'] = [{wch:12},{wch:20},{wch:14},{wch:14},{wch:14},{wch:12},{wch:10},{wch:10}];
+    XLSX.utils.book_append_sheet(wb, wsSum, 'Résumé par mois');
+
+    XLSX.writeFile(wb, `Productions_Export_${new Date().toISOString().slice(0,10).replace(/-/g,'')}.xlsx`);
+    showToast('✓ Export téléchargé', 'success');
+  } catch(err) {
+    showToast('Erreur export : ' + err.message, 'error');
+  }
+  hideLoading();
+}
+
+document.getElementById('btn-export').addEventListener('click', exportToExcel);
+
+// ─── HISTORIQUE : afficher badge mode fusion/remplacement ──
+// (pris en charge via log.mode dans refreshHistory)
+
+// ─── INIT ────────────────────────────────────────────────────
+loadGreentechFromDB();
+refreshHistory();
+refreshExportCount();
+</script>
+</body>
+</html>
