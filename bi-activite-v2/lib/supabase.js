@@ -1,0 +1,12 @@
+import { createClient } from '@supabase/supabase-js';
+
+const SUPABASE_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+// Client lecture — dashboard (clé anon, safe côté browser)
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON);
+
+// Client écriture — admin (service_role, côté serveur uniquement)
+export function supabaseAdmin() {
+  return createClient(SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+}
